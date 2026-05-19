@@ -16,59 +16,62 @@ Wrap any element with an `Editable` component. When logged in as admin, hover sh
 <EditableImage contentKey="hero.image" src="/default.jpg" alt="Hero" className="w-full" />
 ```
 
-## Packages
+## Installation
 
-| Package | Description |
-|---------|-------------|
-| `@editable-ui/core` | React components, context, hooks |
-| `@editable-ui/adapter-json` | JSON file storage (default, zero config) |
-| `@editable-ui/adapter-pg` | PostgreSQL |
-| `@editable-ui/adapter-mysql` | MySQL |
-| `@editable-ui/adapter-sqlite` | SQLite |
-| `@editable-ui/adapter-mongo` | MongoDB |
-| `@editable-ui/storage-local` | Local filesystem image storage |
-| `@editable-ui/storage-s3` | S3-compatible image storage (AWS S3, Cloudflare R2, MinIO) |
-| `@editable-ui/next` | Next.js API route helpers |
+### CLI (recommended)
 
-## Quick start (Next.js + JSON + local storage)
-
-### 1. Install
+Run in your existing Next.js project:
 
 ```bash
-npm install @editable-ui/core @editable-ui/adapter-json @editable-ui/storage-local @editable-ui/next
+npx @editable-ui/cli init
 ```
 
-### 2. Create API routes
+Interactive prompts will ask:
+- Which database adapter (JSON / PostgreSQL / MySQL / SQLite / MongoDB)
+- Which image storage (local filesystem / AWS S3 / Cloudflare R2 / MinIO)
+- Which auth provider (NextAuth.js / Clerk / Custom)
+- Which Next.js router (auto-detected)
 
-```ts
-// pages/api/content.ts
-import { createContentHandler } from '@editable-ui/next'
-import { JsonAdapter } from '@editable-ui/adapter-json'
-import { getServerSession } from 'next-auth'
+Then automatically installs required packages, generates `editable.config.ts`, API routes, and `.env.example`.
 
-const adapter = new JsonAdapter('./data/content.json')
-adapter.initialize()
+After init, wrap your app and start using components — see [Usage](#usage) below.
 
-export default createContentHandler({
-  adapter,
-  isAdmin: async (req) => {
-    const session = await getServerSession(req, res, authOptions)
-    return session?.user?.role === 'admin'
-  },
-})
+### Manual install
+
+<details>
+<summary>Expand for manual steps</summary>
+
+Install only the packages you need:
+
+```bash
+# core (required)
+npm install @editable-ui/core @editable-ui/next
+
+# pick one DB adapter
+npm install @editable-ui/adapter-json    # JSON file (zero config)
+npm install @editable-ui/adapter-pg      # PostgreSQL
+npm install @editable-ui/adapter-mysql   # MySQL
+npm install @editable-ui/adapter-sqlite  # SQLite
+npm install @editable-ui/adapter-mongo   # MongoDB
+
+# pick one image storage
+npm install @editable-ui/storage-local   # local filesystem
+npm install @editable-ui/storage-s3      # S3 / R2 / MinIO
 ```
 
-### 3. Wrap your app
+</details>
+
+---
+
+## Usage
+
+### 1. Wrap your app
 
 ```tsx
-// pages/_app.tsx
+// pages/_app.tsx  (or app/layout.tsx for App Router)
 import { EditableProvider } from '@editable-ui/core'
-import { JsonAdapter } from '@editable-ui/adapter-json'
-import { LocalStorageAdapter } from '@editable-ui/storage-local'
+import { adapter, storage } from '../editable.config'
 import { useSession } from 'next-auth/react'
-
-const adapter = new JsonAdapter()
-const storage = new LocalStorageAdapter()
 
 export default function App({ Component, pageProps }) {
   const { data: session } = useSession()
@@ -82,7 +85,7 @@ export default function App({ Component, pageProps }) {
 }
 ```
 
-### 4. Use in your pages
+### 2. Use in your pages
 
 ```tsx
 import { EditableText, EditableRichText, EditableImage } from '@editable-ui/core'
@@ -112,6 +115,22 @@ export default function AboutPage() {
   )
 }
 ```
+
+---
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| `@editable-ui/core` | React components, context, hooks |
+| `@editable-ui/adapter-json` | JSON file storage (default, zero config) |
+| `@editable-ui/adapter-pg` | PostgreSQL |
+| `@editable-ui/adapter-mysql` | MySQL |
+| `@editable-ui/adapter-sqlite` | SQLite |
+| `@editable-ui/adapter-mongo` | MongoDB |
+| `@editable-ui/storage-local` | Local filesystem image storage |
+| `@editable-ui/storage-s3` | S3-compatible image storage (AWS S3, Cloudflare R2, MinIO) |
+| `@editable-ui/next` | Next.js API route helpers |
 
 ## Storage options
 
