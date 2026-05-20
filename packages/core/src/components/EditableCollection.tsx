@@ -24,6 +24,8 @@ interface EditableCollectionProps {
   hoverPreview?: string
   /** Custom handler for row click — bypasses built-in modal */
   onRowClick?: (item: CollectionItem) => void
+  /** Custom handler for row hover — bypasses built-in panel */
+  onRowHover?: (item: CollectionItem | null) => void
   className?: string
   /** Width of left table side when panel is active. Default: '50%' */
   tableWidth?: string | number
@@ -38,6 +40,7 @@ export function EditableCollection({
   modal,
   hoverPreview,
   onRowClick,
+  onRowHover,
   className,
   tableWidth = '50%',
   panelWidth = '50%',
@@ -71,7 +74,7 @@ export function EditableCollection({
       hoverPreview={panel ? undefined : hoverPreview} // cursor preview only when no panel
       className={className}
       onRowClick={handleRowClick}
-      onRowHover={panel ? setHoveredItem : undefined}
+      onRowHover={onRowHover ?? (panel ? setHoveredItem : undefined)}
       onCellSave={updateItem}
       onDeleteItem={deleteItem}
       onAddItem={addItem}
