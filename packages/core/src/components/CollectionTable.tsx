@@ -11,6 +11,7 @@ interface CollectionTableProps {
   hoverPreview?: string
   className?: string
   onRowClick: (item: CollectionItem) => void
+  onRowHover?: (item: CollectionItem | null) => void
   onCellSave: (id: string, field: string, value: string) => void
   onDeleteItem: (id: string) => void
   onAddItem: () => void
@@ -24,6 +25,7 @@ export function CollectionTable({
   hoverPreview,
   className,
   onRowClick,
+  onRowHover,
   onCellSave,
   onDeleteItem,
   onAddItem,
@@ -56,6 +58,7 @@ export function CollectionTable({
               isAdmin={isAdmin}
               hoverPreview={hoverPreview}
               onRowClick={onRowClick}
+              onRowHover={onRowHover}
               onCellSave={onCellSave}
               onDeleteItem={onDeleteItem}
             />
@@ -138,6 +141,7 @@ function TableRow({
   isAdmin,
   hoverPreview,
   onRowClick,
+  onRowHover,
   onCellSave,
   onDeleteItem,
 }: {
@@ -146,6 +150,7 @@ function TableRow({
   isAdmin: boolean
   hoverPreview?: string
   onRowClick: (item: CollectionItem) => void
+  onRowHover?: (item: CollectionItem | null) => void
   onCellSave: (id: string, field: string, value: string) => void
   onDeleteItem: (id: string) => void
 }) {
@@ -156,8 +161,8 @@ function TableRow({
 
   const row = (
     <tr
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false); setEditingCell(null) }}
+      onMouseEnter={() => { setHovered(true); onRowHover?.(item) }}
+      onMouseLeave={() => { setHovered(false); setEditingCell(null); onRowHover?.(null) }}
       style={{
         cursor: 'pointer',
         background: hovered ? '#f9f9f9' : 'transparent',
