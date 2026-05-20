@@ -1,4 +1,19 @@
-export type ContentType = 'text' | 'richtext' | 'image' | 'link' | 'attribute'
+export type ContentType = 'text' | 'richtext' | 'image' | 'link' | 'attribute' | 'collection' | 'collection-schema'
+
+export type CollectionFieldType = 'text' | 'richtext' | 'image' | 'select'
+
+export interface CollectionField {
+  field: string
+  label: string
+  type?: CollectionFieldType
+  visible?: boolean
+  options?: string[] // for select type
+}
+
+export interface CollectionItem {
+  id: string
+  [key: string]: string
+}
 
 export interface ContentEntry {
   value: string
