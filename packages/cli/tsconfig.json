@@ -5,7 +5,8 @@
     "rootDir": "./src",
     "jsx": "preserve",
     "module": "CommonJS",
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "types": ["node"]
   },
   "include": ["src"]
 }
