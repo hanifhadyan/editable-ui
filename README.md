@@ -1,6 +1,6 @@
 # editable-ui
 
-Inline visual editing plugin for React/Next.js. Edit text, rich text, and images directly on the page — no admin panel needed.
+Inline visual editing plugin for React/Next.js. Edit text, rich text, images, and collections directly on the page — no admin panel needed.
 
 ## How it works
 
@@ -15,6 +15,8 @@ Wrap any element with an `Editable` component. When logged in as admin, hover sh
 
 <EditableImage contentKey="hero.image" src="/default.jpg" alt="Hero" className="w-full" />
 ```
+
+---
 
 ## Installation
 
@@ -118,6 +120,173 @@ export default function AboutPage() {
 
 ---
 
+## EditableCollection
+
+Schema-driven editable table/list with full CRUD for admins. Supports hover panel, click modal, and detail pages — all with your own markup and styles.
+
+### Schema
+
+Define fields with `visible` controlling table column visibility. Hidden fields are still editable by admin in the modal form.
+
+```tsx
+import { EditableCollection } from '@editable-ui/core'
+
+const schema = [
+  { field: 'name',        label: 'Wine',        visible: true },
+  { field: 'producer',    label: 'Producer',    visible: true },
+  { field: 'country',     label: 'Country',     visible: true },
+  { field: 'style',       label: 'Style',       type: 'select',
+    options: ['Red', 'White', 'Rosé', 'Sparkling'], visible: true },
+  { field: 'image',       label: 'Image',       type: 'image',    visible: false },
+  { field: 'description', label: 'Description', type: 'richtext', visible: false },
+  { field: 'price',       label: 'Price',                         visible: false },
+]
+```
+
+### Recommended pattern — full control via callbacks
+
+Use `onRowClick` and `onRowHover` to manage your own state. You own all markup and styles for the panel and modal.
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { EditableCollection } from '@editable-ui/core'
+
+export default function WinesPage() {
+  const [modalItem, setModalItem] = useState(null)
+  const [hoveredItem, setHoveredItem] = useState(null)
+
+  return (
+    <div className="flex min-h-screen">
+
+      {/* left — table */}
+      <div className="w-1/2">
+        <EditableCollection
+          contentKey="wines"
+          schema={schema}
+          onRowClick={(item) => setModalItem(item)}
+          onRowHover={(item) => setHoveredItem(item)}
+        />
+      </div>
+
+      {/* right — image panel, your markup, your styles */}
+      <div className="w-1/2 sticky top-0 h-screen flex items-center justify-center bg-stone-50">
+        {hoveredItem
+          ? <img src={hoveredItem.image} className="h-full object-contain p-16 transition-all" />
+          : <p className="text-gray-400">Hover a wine</p>
+        }
+      </div>
+
+      {/* modal — your markup, your styles */}
+      {modalItem && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setModalItem(null)}
+        >
+          <div
+            className="bg-white rounded-xl p-8 max-w-lg w-full"
+            onClick={e => e.stopPropagation()}
+          >
+            <img src={modalItem.image} className="w-full rounded-lg mb-4" />
+            <h2 className="text-2xl font-bold">{modalItem.name}</h2>
+            <p className="text-sm text-gray-500">{modalItem.producer} · {modalItem.country}</p>
+            <p className="font-semibold mt-1">{modalItem.price}</p>
+            <div
+              className="prose prose-sm mt-4"
+              dangerouslySetInnerHTML={{ __html: modalItem.description }}
+            />
+            <button
+              onClick={() => setModalItem(null)}
+              className="mt-6 px-4 py-2 bg-black text-white rounded-lg"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+    </div>
+  )
+}
+```
+
+### One data source, three render contexts
+
+The same item data flows to all three contexts — you decide what to show where:
+
+| Context | Trigger | How |
+|---------|---------|-----|
+| Table row | always visible | `visible: true` fields in schema |
+| Hover panel | `onRowHover` | `hoveredItem.fieldName` in your panel JSX |
+| Click modal | `onRowClick` | `modalItem.fieldName` in your modal JSX |
+| Detail page | URL param | `useCollectionItem('wines', id)` |
+
+### Detail page
+
+```tsx
+// app/wines/[id]/page.tsx
+import { useCollectionItem } from '@editable-ui/core'
+
+export default function WineDetailPage({ params }) {
+  const item = useCollectionItem('wines', params.id)
+
+  if (!item) return <div>Not found</div>
+
+  return (
+    <div className="max-w-2xl mx-auto p-8">
+      <img src={item.image} className="w-full rounded-xl mb-6" />
+      <h1 className="text-4xl font-bold">{item.name}</h1>
+      <p className="text-gray-500 mt-1">{item.producer} · {item.country}</p>
+      <div
+        className="prose mt-6"
+        dangerouslySetInnerHTML={{ __html: item.description }}
+      />
+    </div>
+  )
+}
+```
+
+Navigate to detail page from table:
+
+```tsx
+import { useRouter } from 'next/navigation'
+
+const router = useRouter()
+
+<EditableCollection
+  contentKey="wines"
+  schema={schema}
+  onRowClick={(item) => router.push(`/wines/${item.id}`)}
+  onRowHover={(item) => setHoveredItem(item)}
+/>
+```
+
+### Admin behavior
+
+| Interaction | Admin | Non-admin |
+|-------------|-------|-----------|
+| View table | ✅ | ✅ |
+| Double-click cell | inline edit | — |
+| Click row | fires `onRowClick` | fires `onRowClick` |
+| Hover row | fires `onRowHover` | fires `onRowHover` |
+| Click column header | rename label | — |
+| Add row | ✅ "+ Add row" button | — |
+| Delete row | ✅ 🗑 on row hover | — |
+
+When `onRowClick` is not provided and `modal` prop is used, clicking opens the built-in modal with an auto-generated edit form for all fields.
+
+### Field types
+
+| Type | Edit UI |
+|------|---------|
+| `text` (default) | inline input |
+| `richtext` | textarea (Tiptap for inline cell edit) |
+| `image` | file upload or URL paste |
+| `select` | dropdown with `options` array |
+
+---
+
 ## Packages
 
 | Package | Description |
@@ -131,6 +300,9 @@ export default function AboutPage() {
 | `@editable-ui/storage-local` | Local filesystem image storage |
 | `@editable-ui/storage-s3` | S3-compatible image storage (AWS S3, Cloudflare R2, MinIO) |
 | `@editable-ui/next` | Next.js API route helpers |
+| `@editable-ui/cli` | Interactive CLI initializer |
+
+---
 
 ## Storage options
 
@@ -165,6 +337,8 @@ import { MongoAdapter } from '@editable-ui/adapter-mongo'
 const adapter = new MongoAdapter(process.env.MONGODB_URI)
 ```
 
+---
+
 ## Image storage options
 
 ### Local filesystem (default fallback)
@@ -185,6 +359,8 @@ const storage = new S3StorageAdapter({
 })
 ```
 
+---
+
 ## Admin access
 
 `isAdmin` is a boolean prop on `EditableProvider`. Source it from your auth system:
@@ -202,6 +378,8 @@ const isAdmin = ADMIN_EMAILS.includes(session?.user?.email)
 ```
 
 Always verify admin on the server side in your API routes — never trust the client-side flag alone for writes.
+
+---
 
 ## Requirements
 
