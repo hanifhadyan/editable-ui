@@ -3,9 +3,6 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "jsx": "preserve",
-    "module": "CommonJS",
-    "moduleResolution": "node16",
     "types": ["node"]
   },
   "include": ["src"]
