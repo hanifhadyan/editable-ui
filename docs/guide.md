@@ -12,6 +12,7 @@ Complete walkthrough: setup, all components, real-world patterns.
 4. [EditableRichText](#4-editablerichtext)
 5. [EditableImage](#5-editableimage)
 6. [EditableCollection](#6-editablecollection)
+7. [EditableGallery](#7-editablegallery)
    - [Basic table](#61-basic-table)
    - [Hover image panel](#62-hover-image-panel-toto-wines-style)
    - [Click modal](#63-click-modal)
@@ -1009,6 +1010,119 @@ export default function WineDetailPage({ params }) {
 
 ---
 
+## 7. EditableGallery
+
+Editable image gallery. Admin can add multiple images, remove any image, and drag to reorder. You control the grid layout and image styles.
+
+### Basic usage
+
+```tsx
+import { EditableGallery } from '@editable-ui/core'
+
+<EditableGallery
+  contentKey="gallery.main"
+  className="grid grid-cols-3 gap-2"
+  imageClassName="w-full aspect-square object-cover"
+/>
+```
+
+- `contentKey` — key to store gallery in DB/JSON.
+- `className` — CSS class for the grid container. Defaults to a 3-column grid if omitted.
+- `imageClassName` — CSS class applied to each `<img>` element.
+
+### Admin behavior
+
+| Interaction | Result |
+|-------------|--------|
+| Click **+ Add images** | File picker — supports multi-select |
+| Hover image | Shows drag handle (top-left) and ✕ delete (top-right) |
+| Drag image | Reorders within grid |
+| Click ✕ | Removes image from gallery |
+
+Images upload to your configured storage (local or S3/R2/MinIO) automatically.
+
+### Custom image render
+
+Full control over each image's markup. Plugin wraps your render with drag + delete overlays for admin.
+
+```tsx
+<EditableGallery
+  contentKey="gallery.main"
+  className="grid grid-cols-3 md:grid-cols-4 gap-3"
+  renderImage={(img) => (
+    <div className="relative aspect-square overflow-hidden rounded-lg group">
+      <img
+        src={img.src}
+        alt={img.alt}
+        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+      />
+      {img.caption && (
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-3">
+          <p className="text-white text-sm">{img.caption}</p>
+        </div>
+      )}
+    </div>
+  )}
+/>
+```
+
+### Masonry / non-uniform layout
+
+Use CSS `columns` instead of `grid`:
+
+```tsx
+<EditableGallery
+  contentKey="gallery.main"
+  className="columns-3 gap-3 space-y-3"
+  imageClassName="w-full rounded-lg"
+/>
+```
+
+### Full page gallery example (House of Yuen style)
+
+```tsx
+'use client'
+
+import { EditableGallery } from '@editable-ui/core'
+
+export default function GalleryPage() {
+  return (
+    <div className="px-8 py-16 max-w-6xl mx-auto">
+      <h1 className="text-xs uppercase tracking-widest text-gray-400 mb-8">Gallery</h1>
+
+      <EditableGallery
+        contentKey="gallery.interior"
+        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2"
+        renderImage={(img) => (
+          <div className="relative aspect-square overflow-hidden group cursor-pointer">
+            <img
+              src={img.src}
+              alt={img.alt ?? 'Gallery photo'}
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            />
+          </div>
+        )}
+      />
+    </div>
+  )
+}
+```
+
+### GalleryImage type
+
+Each image in the gallery has:
+
+```ts
+{
+  id: string       // auto-generated UUID
+  src: string      // URL (uploaded or external)
+  alt?: string     // defaults to filename without extension
+  caption?: string // optional caption text
+}
+```
+
+---
+
 ## Summary
 
 | Component | Use for |
@@ -1018,6 +1132,7 @@ export default function WineDetailPage({ params }) {
 | `EditableImage` | Any image that needs to be replaceable |
 | `EditableCollection` | Lists, tables, catalogs with multiple items |
 | `useCollectionItem` | Detail page for a single collection item |
+| `EditableGallery` | Image galleries with add, remove, drag-to-reorder |
 
 **Plugin provides:** data storage, admin edit UI, CRUD operations.
 

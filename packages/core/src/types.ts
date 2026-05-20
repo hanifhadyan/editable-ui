@@ -15,6 +15,13 @@ export interface CollectionItem {
   [key: string]: string
 }
 
+export interface GalleryImage {
+  id: string
+  src: string
+  alt?: string
+  caption?: string
+}
+
 export interface ContentEntry {
   value: string
   type: ContentType
