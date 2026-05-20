@@ -2,6 +2,8 @@
 
 Inline visual editing plugin for React/Next.js. Edit text, rich text, images, and collections directly on the page — no admin panel needed.
 
+📖 **[Full Implementation Guide →](./docs/guide.md)** — step-by-step setup, all components, real-world wine catalog example.
+
 ## How it works
 
 Wrap any element with an `Editable` component. When logged in as admin, hover shows an edit icon. Click to edit in place. Changes save to your chosen storage.
