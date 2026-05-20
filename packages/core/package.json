@@ -1,6 +1,6 @@
 {
   "name": "@editable-ui/core",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Core React components, context, and hooks for editable-ui",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

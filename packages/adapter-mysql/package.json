@@ -1,6 +1,6 @@
 {
   "name": "@editable-ui/adapter-mysql",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "MySQL adapter for editable-ui",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

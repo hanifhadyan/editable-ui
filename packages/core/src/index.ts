@@ -1,4 +1,5 @@
 export { EditableProvider, useEditableContext } from './EditableContext'
+export { FloatingEditBar } from './components/FloatingEditBar'
 export { useEditable } from './useEditable'
 export { useCollectionItem } from './hooks/useCollectionItem'
 export { EditableText } from './components/EditableText'

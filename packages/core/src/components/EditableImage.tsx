@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { useEditableContext } from '../EditableContext'
 import { EditIcon } from './EditIcon'
 
@@ -23,6 +23,12 @@ export function EditableImage({
   const [showModal, setShowModal] = useState(false)
   const [urlInput, setUrlInput] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLSpanElement>(null)
+
+  // Detect cursor already inside on mount
+  useEffect(() => {
+    if (isAdmin && containerRef.current?.matches(':hover')) setIsHovered(true)
+  }, [isAdmin])
 
   const src = content[contentKey]?.value ?? defaultSrc
 
@@ -48,7 +54,8 @@ export function EditableImage({
 
   return (
     <span
-      style={{ position: 'relative', display: 'inline-block' }}
+      ref={containerRef}
+      style={{ position: 'relative', display: 'inline-block', width: '100%' }}
       onMouseEnter={() => isAdmin && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

@@ -1,6 +1,6 @@
 {
   "name": "@editable-ui/adapter-sqlite",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "SQLite adapter for editable-ui",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
