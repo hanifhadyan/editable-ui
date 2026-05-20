@@ -7,7 +7,7 @@ interface CreateHandlerOptions {
   isAdmin: (req: NextApiRequest) => boolean | Promise<boolean>
 }
 
-export function createContentHandler({ adapter, storage, isAdmin }: CreateHandlerOptions) {
+export function createContentHandler({ adapter, storage: _storage, isAdmin }: CreateHandlerOptions) {
   return async function handler(req: NextApiRequest, res: NextApiResponse) {
     const admin = await isAdmin(req)
     if (!admin) {
