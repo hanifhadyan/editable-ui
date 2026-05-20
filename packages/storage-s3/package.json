@@ -1,6 +1,6 @@
 {
   "name": "@editable-ui/storage-s3",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "S3-compatible image storage for editable-ui (AWS S3, Cloudflare R2, MinIO)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
