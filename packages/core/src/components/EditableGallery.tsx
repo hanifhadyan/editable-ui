@@ -13,7 +13,6 @@ import {
   SortableContext,
   rectSortingStrategy,
   useSortable,
-  arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useGallery } from '../hooks/useGallery'
@@ -37,14 +36,12 @@ export function EditableGallery({
 }: EditableGalleryProps) {
   const { images, isAdmin, addImages, removeImage, reorder } = useGallery(contentKey)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [dragging, setDragging] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setDragging(false)
     const { active, over } = event
     if (!over || active.id === over.id) return
     const from = images.findIndex(img => img.id === active.id)
@@ -100,7 +97,6 @@ export function EditableGallery({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
-      onDragStart={() => setDragging(true)}
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={images.map(img => img.id)} strategy={rectSortingStrategy}>
