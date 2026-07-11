@@ -7,6 +7,8 @@ export { EditableRichText } from './components/EditableRichText'
 export { EditableImage } from './components/EditableImage'
 export { EditableCollection } from './components/EditableCollection'
 export { EditableGallery } from './components/EditableGallery'
+export { EditableImageList } from './components/EditableImageList'
+export type { EditableImageListProps } from './components/EditableImageList'
 export type {
   ContentType,
   ContentEntry,

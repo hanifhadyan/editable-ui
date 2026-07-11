@@ -1123,6 +1123,47 @@ Each image in the gallery has:
 
 ---
 
+## 8. EditableImageList
+
+Controlled image-list editor for resource forms. Use it when the host application owns upload timing and persistence, such as creating a record before its images can be uploaded. Unlike `EditableGallery`, it does not use `EditableProvider`, upload files, or save content itself.
+
+```tsx
+import { useState } from 'react'
+import { EditableImageList } from '@editable-ui/core'
+
+function ProductImages() {
+  const [images, setImages] = useState(['/products/cover.webp'])
+  const [files, setFiles] = useState<File[]>([])
+
+  async function save() {
+    const uploadedUrls = await Promise.all(files.map(uploadProductImage))
+    await updateProduct({ images: [...images, ...uploadedUrls] })
+    setImages(current => [...current, ...uploadedUrls])
+    setFiles([])
+  }
+
+  return (
+    <>
+      <EditableImageList
+        images={images}
+        files={files}
+        onImagesChange={setImages}
+        onFilesChange={setFiles}
+        accept="image/jpeg,image/png,image/webp"
+        addLabel="Add images"
+      />
+      <button onClick={save}>Save</button>
+    </>
+  )
+}
+```
+
+- Existing URLs can be removed and reordered by drag and drop.
+- Pending `File` objects have local previews and can be removed before upload.
+- `onImagesChange` and `onFilesChange` keep all resource, transport, validation, rollback, and storage decisions in the host application.
+
+---
+
 ## Summary
 
 | Component | Use for |
