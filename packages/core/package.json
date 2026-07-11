@@ -1,6 +1,6 @@
 {
   "name": "@editable-ui/core",
-  "version": "0.0.3",
+  "version": "0.0.12",
   "description": "Core React components, context, and hooks for editable-ui",
   "repository": { "type": "git", "url": "git+https://github.com/hanifhadyan/editable-ui.git" },
   "homepage": "https://github.com/hanifhadyan/editable-ui#readme",

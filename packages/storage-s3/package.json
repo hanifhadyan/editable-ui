@@ -1,6 +1,6 @@
 {
   "name": "@editable-ui/storage-s3",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "S3-compatible image storage for editable-ui (AWS S3, Cloudflare R2, MinIO)",
   "repository": { "type": "git", "url": "git+https://github.com/hanifhadyan/editable-ui.git" },
   "homepage": "https://github.com/hanifhadyan/editable-ui#readme",

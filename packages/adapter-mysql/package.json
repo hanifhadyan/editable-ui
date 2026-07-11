@@ -1,6 +1,6 @@
 {
   "name": "@editable-ui/adapter-mysql",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "MySQL adapter for editable-ui",
   "repository": { "type": "git", "url": "git+https://github.com/hanifhadyan/editable-ui.git" },
   "homepage": "https://github.com/hanifhadyan/editable-ui#readme",
