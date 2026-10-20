@@ -1,6 +1,7 @@
 {
   "name": "@editable-ui/cli",
   "version": "0.0.5",
+  "files": ["dist"],
   "description": "CLI initializer for editable-ui",
   "repository": { "type": "git", "url": "git+https://github.com/hanifhadyan/editable-ui.git" },
   "homepage": "https://github.com/hanifhadyan/editable-ui#readme",

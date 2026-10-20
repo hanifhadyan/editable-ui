@@ -22,6 +22,8 @@ Wrap any element with an `Editable` component. When logged in as admin, hover sh
 
 ## Installation
 
+Package release steps are documented in [docs/releasing.md](./docs/releasing.md).
+
 ### CLI (recommended)
 
 Run in your existing Next.js project:
