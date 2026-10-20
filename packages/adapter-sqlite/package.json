@@ -1,18 +1,25 @@
 {
   "name": "@editable-ui/adapter-sqlite",
   "version": "0.0.5",
+  "files": ["dist"],
   "description": "SQLite adapter for editable-ui",
   "repository": { "type": "git", "url": "git+https://github.com/hanifhadyan/editable-ui.git" },
   "homepage": "https://github.com/hanifhadyan/editable-ui#readme",
   "bugs": { "url": "https://github.com/hanifhadyan/editable-ui/issues" },
+  "engines": { "node": "20.x || 22.x || 23.x || 24.x || 25.x || 26.x" },
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     }
   },
   "scripts": {
@@ -23,7 +30,7 @@
   },
   "dependencies": {
     "@editable-ui/core": "workspace:*",
-    "better-sqlite3": "^9.4.0"
+    "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
