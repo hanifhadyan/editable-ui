@@ -74,8 +74,8 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm typecheck
       - uses: changesets/action/pack@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         id: pack
         with:
