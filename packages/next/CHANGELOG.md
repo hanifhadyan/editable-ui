@@ -1,5 +1,16 @@
 # @editable-ui/next
 
+## 0.2.0
+
+### Minor Changes
+
+- 44b0662: Add MIT package metadata, cross-process-safe upload cleanup, and safer content editing and initialization.
+
+### Patch Changes
+
+- Updated dependencies [44b0662]
+  - @editable-ui/core@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes

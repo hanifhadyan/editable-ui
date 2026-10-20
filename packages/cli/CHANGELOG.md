@@ -1,5 +1,11 @@
 # @editable-ui/cli
 
+## 0.0.7
+
+### Patch Changes
+
+- 44b0662: Add MIT package metadata, cross-process-safe upload cleanup, and safer content editing and initialization.
+
 ## 0.0.6
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@editable-ui/storage-s3",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "license": "MIT",
   "files": ["dist"],
   "description": "S3-compatible image storage for editable-ui (AWS S3, Cloudflare R2, MinIO)",
