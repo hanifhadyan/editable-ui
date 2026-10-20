@@ -1,13 +1,21 @@
 import { Pool, type PoolConfig } from 'pg'
 import type { ContentAdapter, ContentEntry, ContentRecord, ContentType } from '@editable-ui/core'
 
+function quoteTableName(table: string): string {
+  const parts = typeof table === 'string' ? table.split('.') : []
+  if (parts.length > 2 || parts.some(part => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(part))) {
+    throw new Error('Invalid SQL table name')
+  }
+  return parts.map(part => `"${part}"`).join('.')
+}
+
 export class PostgresAdapter implements ContentAdapter {
   private pool: Pool
   private table: string
 
   constructor(config: PoolConfig | string, table = 'editable_content') {
+    this.table = quoteTableName(table)
     this.pool = new Pool(typeof config === 'string' ? { connectionString: config } : config)
-    this.table = table
   }
 
   async initialize(): Promise<void> {

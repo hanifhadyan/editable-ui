@@ -72,9 +72,8 @@ npm install @editable-ui/storage-s3      # S3 / R2 / MinIO
 ### 1. Wrap your app
 
 ```tsx
-// pages/_app.tsx  (or app/layout.tsx for App Router)
+// pages/_app.tsx
 import { EditableProvider } from '@editable-ui/core'
-import { adapter, storage } from '../editable.config'
 import { useSession } from 'next-auth/react'
 
 export default function App({ Component, pageProps }) {
@@ -82,12 +81,14 @@ export default function App({ Component, pageProps }) {
   const isAdmin = session?.user?.role === 'admin'
 
   return (
-    <EditableProvider isAdmin={isAdmin} adapter={adapter} storage={storage}>
+    <EditableProvider isAdmin={isAdmin} initialContent={pageProps.editableContent ?? {}}>
       <Component {...pageProps} />
     </EditableProvider>
   )
 }
 ```
+
+`editableContent` should contain only public values loaded by your server page. Admin edits and uploads go through the generated API routes; the provider no longer accepts database or storage adapters. Keep `editable.config` imports in server code.
 
 ### 2. Use in your pages
 
@@ -338,6 +339,8 @@ const adapter = new SQLiteAdapter('./data/content.db')
 import { MongoAdapter } from '@editable-ui/adapter-mongo'
 const adapter = new MongoAdapter(process.env.MONGODB_URI)
 ```
+
+PostgreSQL, MySQL, and SQLite adapters accept a custom table name as a second constructor argument. Use an identifier such as `editable_content` or a qualified name such as `public.editable_content`; each part must start with a letter or underscore and contain only letters, numbers, or underscores.
 
 ---
 

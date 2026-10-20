@@ -2,9 +2,14 @@
   "name": "@editable-ui/adapter-mysql",
   "version": "0.0.5",
   "description": "MySQL adapter for editable-ui",
-  "repository": { "type": "git", "url": "git+https://github.com/hanifhadyan/editable-ui.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hanifhadyan/editable-ui.git"
+  },
   "homepage": "https://github.com/hanifhadyan/editable-ui#readme",
-  "bugs": { "url": "https://github.com/hanifhadyan/editable-ui/issues" },
+  "bugs": {
+    "url": "https://github.com/hanifhadyan/editable-ui/issues"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -23,12 +28,12 @@
   },
   "dependencies": {
     "@editable-ui/core": "workspace:*",
-    "mysql2": "^3.9.0"
+    "mysql2": "^3.24.6"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "typescript": "^5.0.0"
   },
   "publishConfig": {
     "access": "public"

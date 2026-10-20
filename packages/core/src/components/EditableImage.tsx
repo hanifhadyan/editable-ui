@@ -75,7 +75,7 @@ export function EditableImage({
           <button onClick={() => fileRef.current?.click()} style={btnStyle}>
             Upload file
           </button>
-          <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
+          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" style={{ display: 'none' }} onChange={handleFile} />
           <div style={{ margin: '8px 0', textAlign: 'center', color: '#999' }}>or</div>
           <input
             type="url"

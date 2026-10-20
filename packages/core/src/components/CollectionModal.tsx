@@ -120,7 +120,7 @@ export function CollectionModal({ item, schema, onClose, onSave, renderView }: C
                         Upload
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/png,image/jpeg,image/gif,image/webp"
                           style={{ display: 'none' }}
                           onChange={e => {
                             const file = e.target.files?.[0]

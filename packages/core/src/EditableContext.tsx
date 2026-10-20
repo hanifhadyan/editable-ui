@@ -2,8 +2,11 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import type { EditableContextValue, EditableConfig, ContentRecord, ContentType } from './types'
+import { MAX_UPLOAD_SIZE } from './types'
+import { sanitizeRichText } from './sanitize'
 
 const EditableContext = createContext<EditableContextValue | null>(null)
+const EMPTY_CONTENT: ContentRecord = {}
 
 interface EditableProviderProps extends EditableConfig {
   children: React.ReactNode
@@ -13,39 +16,68 @@ interface EditableProviderProps extends EditableConfig {
 export function EditableProvider({
   children,
   isAdmin,
-  adapter,
-  storage,
-  initialContent = {},
+  initialContent = EMPTY_CONTENT,
 }: EditableProviderProps) {
-  const [content, setContentState] = useState<ContentRecord>(initialContent)
+  const [content, setContentState] = useState<ContentRecord>(() => sanitizeContentRecord(initialContent))
 
   useEffect(() => {
-    if (!adapter) return
-    adapter.initialize().then(() => {
-      adapter.getAll().then(setContentState)
-    })
-  }, [adapter])
+    if (!isAdmin) return
+
+    let cancelled = false
+    fetch('/api/editable/content')
+      .then(async response => {
+        if (!response.ok) throw new Error('Could not load editable content')
+        return response.json()
+      })
+      .then(records => {
+        if (!cancelled) setContentState(sanitizeContentRecord(records))
+      })
+      .catch(error => console.error('[editable-ui] Failed to load content', error))
+
+    return () => { cancelled = true }
+  }, [isAdmin])
+
+  useEffect(() => {
+    if (!isAdmin) setContentState(sanitizeContentRecord(initialContent))
+  }, [isAdmin, initialContent])
 
   const setContent = useCallback(
     async (key: string, value: string, type: ContentType) => {
-      const entry = { value, type, updatedAt: new Date().toISOString() }
-      setContentState(prev => ({ ...prev, [key]: entry }))
-      if (adapter) {
-        await adapter.set(key, value, type)
-      }
+      const safeValue = type === 'richtext' ? sanitizeRichText(value) : value
+      const response = await fetch('/api/editable/content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value: safeValue, type }),
+      })
+      if (!response.ok) throw new Error('Could not save editable content')
+      setContentState(prev => ({
+        ...prev,
+        [key]: { value: safeValue, type, updatedAt: new Date().toISOString() },
+      }))
     },
-    [adapter]
+    []
   )
 
   const uploadImage = useCallback(
     async (file: File): Promise<string> => {
-      if (!storage) {
-        throw new Error('No storage adapter configured')
-      }
-      const buffer = Buffer.from(await file.arrayBuffer())
-      return storage.upload(buffer, file.name, file.type)
+      if (file.size > MAX_UPLOAD_SIZE) throw new Error('Images must be 10 MiB or smaller')
+      const encoded = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result).split(',', 2)[1] ?? '')
+        reader.onerror = () => reject(reader.error)
+        reader.readAsDataURL(file)
+      })
+      const response = await fetch('/api/editable/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: encoded }),
+      })
+      if (!response.ok) throw new Error('Could not upload image')
+      const result = await response.json()
+      if (typeof result.url !== 'string') throw new Error('Invalid upload response')
+      return result.url
     },
-    [storage]
+    []
   )
 
   return (
@@ -53,6 +85,16 @@ export function EditableProvider({
       {children}
     </EditableContext.Provider>
   )
+}
+
+function sanitizeContentRecord(records: ContentRecord | null | undefined): ContentRecord {
+  if (!records || typeof records !== 'object') return {}
+  return Object.fromEntries(Object.entries(records).map(([key, entry]) => [
+    key,
+    entry?.type === 'richtext' && typeof entry.value === 'string'
+      ? { ...entry, value: sanitizeRichText(entry.value) }
+      : entry,
+  ])) as ContentRecord
 }
 
 export function useEditableContext(): EditableContextValue {

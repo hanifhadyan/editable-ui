@@ -252,7 +252,7 @@ export function EditableGallery({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/gif,image/webp"
           multiple
           style={{ display: 'none' }}
           onChange={e => {

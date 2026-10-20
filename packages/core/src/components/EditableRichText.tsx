@@ -3,10 +3,9 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
-import Link from '@tiptap/extension-link'
 import TextAlign from '@tiptap/extension-text-align'
 import { useEditableContext } from '../EditableContext'
+import { sanitizeRichText } from '../sanitize'
 import { RichTextToolbar } from './RichTextToolbar'
 import { FloatingEditBar } from './FloatingEditBar'
 
@@ -27,9 +26,10 @@ export function EditableRichText({
 }: EditableRichTextProps) {
   const { isAdmin, content, setContent } = useEditableContext()
   const savedValue = content[contentKey]?.value ?? defaultValue
+  const safeSavedValue = sanitizeRichText(savedValue)
 
   const [state, setState] = useState<EditState>('idle')
-  const [draft, setDraft] = useState(savedValue)
+  const [draft, setDraft] = useState(safeSavedValue)
   const [hovered, setHovered] = useState(false)
   const [saving, setSaving] = useState(false)
   const idleContainerRef = useRef<HTMLDivElement>(null)
@@ -41,8 +41,8 @@ export function EditableRichText({
 
   // Sync external value when idle
   useEffect(() => {
-    if (state === 'idle') setDraft(savedValue)
-  }, [savedValue]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (state === 'idle') setDraft(safeSavedValue)
+  }, [safeSavedValue]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Warn before unload when preview has unsaved changes
   useEffect(() => {
@@ -56,13 +56,12 @@ export function EditableRichText({
   }, [state])
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
-      StarterKit,
-      Underline,
-      Link.configure({ openOnClick: false }),
+      StarterKit.configure({ link: { openOnClick: false } }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
     ],
-    content: draft,
+    content: safeSavedValue,
     editable: state === 'editing',
   })
 
@@ -74,7 +73,7 @@ export function EditableRichText({
       setTimeout(() => editor.commands.focus(), 0)
     } else {
       editor.setEditable(false)
-      editor.commands.setContent(state === 'preview' ? draft : savedValue)
+      editor.commands.setContent(state === 'preview' ? sanitizeRichText(draft) : safeSavedValue)
     }
   }, [state]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -83,19 +82,19 @@ export function EditableRichText({
     return React.createElement(Tag as string, {
       className,
       style,
-      dangerouslySetInnerHTML: { __html: savedValue },
+      dangerouslySetInnerHTML: { __html: safeSavedValue },
     })
   }
 
   const handlePreview = useCallback(() => {
-    const html = editor?.getHTML() ?? draft
+    const html = sanitizeRichText(editor?.getHTML() ?? draft)
     setDraft(html)
     editor?.setEditable(false)
     setState('preview')
   }, [editor, draft])
 
   const handleSave = useCallback(async () => {
-    const html = state === 'editing' ? (editor?.getHTML() ?? draft) : draft
+    const html = sanitizeRichText(state === 'editing' ? (editor?.getHTML() ?? draft) : draft)
     setSaving(true)
     await setContent(contentKey, html, 'richtext')
     setSaving(false)
@@ -105,11 +104,11 @@ export function EditableRichText({
   }, [state, editor, draft, contentKey, setContent])
 
   const handleCancel = useCallback(() => {
-    editor?.commands.setContent(savedValue)
+    editor?.commands.setContent(safeSavedValue)
     editor?.setEditable(false)
-    setDraft(savedValue)
+    setDraft(safeSavedValue)
     setState('idle')
-  }, [editor, savedValue])
+  }, [editor, safeSavedValue])
 
   // IDLE
   if (state === 'idle') {
@@ -123,7 +122,7 @@ export function EditableRichText({
         {React.createElement(Tag as string, {
           className,
           style,
-          dangerouslySetInnerHTML: { __html: savedValue },
+          dangerouslySetInnerHTML: { __html: safeSavedValue },
         })}
         {hovered && (
           <button onClick={() => setState('editing')} style={editBtnStyle} title={`Edit "${contentKey}"`}>
@@ -159,7 +158,7 @@ export function EditableRichText({
               width: '100%',
               boxSizing: 'border-box',
             } as React.CSSProperties,
-            dangerouslySetInnerHTML: { __html: draft },
+            dangerouslySetInnerHTML: { __html: sanitizeRichText(draft) },
           })}
         </div>
       </>

@@ -2,9 +2,14 @@
   "name": "@editable-ui/core",
   "version": "0.0.12",
   "description": "Core React components, context, and hooks for editable-ui",
-  "repository": { "type": "git", "url": "git+https://github.com/hanifhadyan/editable-ui.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hanifhadyan/editable-ui.git"
+  },
   "homepage": "https://github.com/hanifhadyan/editable-ui#readme",
-  "bugs": { "url": "https://github.com/hanifhadyan/editable-ui/issues" },
+  "bugs": {
+    "url": "https://github.com/hanifhadyan/editable-ui/issues"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -26,15 +31,15 @@
     "react-dom": ">=17.0.0"
   },
   "dependencies": {
-    "@tiptap/react": "^2.4.0",
-    "@tiptap/starter-kit": "^2.4.0",
-    "@tiptap/extension-underline": "^2.4.0",
-    "@tiptap/extension-link": "^2.4.0",
-    "@tiptap/extension-text-align": "^2.4.0",
-    "@tiptap/extension-placeholder": "^2.4.0",
     "@dnd-kit/core": "^6.1.0",
     "@dnd-kit/sortable": "^8.0.0",
-    "@dnd-kit/utilities": "^3.2.0"
+    "@dnd-kit/utilities": "^3.2.0",
+    "@tiptap/extension-link": "^3.32.0",
+    "@tiptap/extension-text-align": "^3.32.0",
+    "@tiptap/extension-underline": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
+    "isomorphic-dompurify": "2.26.0"
   },
   "devDependencies": {
     "tsup": "^8.0.0",

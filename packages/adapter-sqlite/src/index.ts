@@ -1,18 +1,26 @@
 import Database from 'better-sqlite3'
 import type { ContentAdapter, ContentEntry, ContentRecord, ContentType } from '@editable-ui/core'
 
+function quoteTableName(table: string): string {
+  const parts = typeof table === 'string' ? table.split('.') : []
+  if (parts.length > 2 || parts.some(part => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(part))) {
+    throw new Error('Invalid SQL table name')
+  }
+  return parts.map(part => `"${part}"`).join('.')
+}
+
 export class SQLiteAdapter implements ContentAdapter {
   private db: Database.Database
   private table: string
 
   constructor(filePath = './data/content.db', table = 'editable_content') {
+    this.table = quoteTableName(table)
     this.db = new Database(filePath)
-    this.table = table
   }
 
   async initialize(): Promise<void> {
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS "${this.table}" (
+      CREATE TABLE IF NOT EXISTS ${this.table} (
         key        TEXT PRIMARY KEY,
         value      TEXT NOT NULL,
         type       TEXT NOT NULL,
@@ -23,7 +31,7 @@ export class SQLiteAdapter implements ContentAdapter {
 
   async get(key: string): Promise<ContentEntry | null> {
     const row = this.db
-      .prepare(`SELECT value, type, updated_at FROM "${this.table}" WHERE key = ?`)
+      .prepare(`SELECT value, type, updated_at FROM ${this.table} WHERE key = ?`)
       .get(key) as any
     if (!row) return null
     return { value: row.value, type: row.type, updatedAt: row.updated_at }
@@ -32,7 +40,7 @@ export class SQLiteAdapter implements ContentAdapter {
   async set(key: string, value: string, type: ContentType): Promise<void> {
     this.db
       .prepare(
-        `INSERT INTO "${this.table}" (key, value, type, updated_at)
+        `INSERT INTO ${this.table} (key, value, type, updated_at)
          VALUES (?, ?, ?, datetime('now'))
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, type = excluded.type, updated_at = datetime('now')`
       )
@@ -41,7 +49,7 @@ export class SQLiteAdapter implements ContentAdapter {
 
   async getAll(): Promise<ContentRecord> {
     const rows = this.db
-      .prepare(`SELECT key, value, type, updated_at FROM "${this.table}"`)
+      .prepare(`SELECT key, value, type, updated_at FROM ${this.table}`)
       .all() as any[]
     return Object.fromEntries(
       rows.map(r => [r.key, { value: r.value, type: r.type, updatedAt: r.updated_at }])
@@ -49,6 +57,6 @@ export class SQLiteAdapter implements ContentAdapter {
   }
 
   async delete(key: string): Promise<void> {
-    this.db.prepare(`DELETE FROM "${this.table}" WHERE key = ?`).run(key)
+    this.db.prepare(`DELETE FROM ${this.table} WHERE key = ?`).run(key)
   }
 }

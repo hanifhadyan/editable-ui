@@ -55,8 +55,10 @@ import { authOptions } from './pages/api/auth/[...nextauth]'`,
 }
 
 const IS_ADMIN_FN: Record<string, string> = {
-  'next-auth': `async (req: any, res: any) => {
-  const session = await getServerSession(req, res, authOptions)
+  'next-auth': `async (req: any, res?: any) => {
+  const session = res
+    ? await getServerSession(req, res, authOptions)
+    : await getServerSession(authOptions)
   return session?.user?.role === 'admin'
 }`,
   clerk: `(req: any) => {

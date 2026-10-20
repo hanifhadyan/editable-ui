@@ -166,7 +166,7 @@ async function main() {
   console.log('')
   p.log.info('Next steps:')
   p.log.info('  1. Copy .env.example to .env.local and fill in your values')
-  p.log.info('  2. Wrap your app with <EditableProvider> from @editable-ui/core')
+  p.log.info('  2. Wrap your app with <EditableProvider>; pass public server-loaded content as initialContent')
   p.log.info('  3. Use <EditableText>, <EditableRichText>, <EditableImage> in your pages')
   if (opts.auth === 'custom') {
     p.log.warn('  4. Implement isAdmin() in editable.config.' + ext)

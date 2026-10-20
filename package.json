@@ -8,6 +8,7 @@
     "dev": "pnpm -r dev",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm build && node --test tests/security.test.cjs",
     "clean": "pnpm -r clean"
   },
   "devDependencies": {

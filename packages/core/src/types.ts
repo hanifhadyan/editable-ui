@@ -1,3 +1,5 @@
+export const MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+
 export type ContentType = 'text' | 'richtext' | 'image' | 'link' | 'attribute' | 'collection' | 'collection-schema'
 
 export type CollectionFieldType = 'text' | 'richtext' | 'image' | 'select'
@@ -47,8 +49,6 @@ export interface StorageAdapter {
 
 export interface EditableConfig {
   isAdmin: boolean
-  adapter?: ContentAdapter
-  storage?: StorageAdapter
 }
 
 export interface EditableContextValue {

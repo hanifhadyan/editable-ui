@@ -38,7 +38,7 @@ export function EditableImageList({
   files,
   onImagesChange,
   onFilesChange,
-  accept = 'image/*',
+  accept = 'image/png,image/jpeg,image/gif,image/webp',
   multiple = true,
   className,
   itemClassName,
