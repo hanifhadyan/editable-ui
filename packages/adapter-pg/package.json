@@ -1,6 +1,6 @@
 {
   "name": "@editable-ui/adapter-pg",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "license": "MIT",
   "files": ["dist"],
   "description": "PostgreSQL adapter for editable-ui",

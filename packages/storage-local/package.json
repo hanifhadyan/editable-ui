@@ -1,6 +1,6 @@
 {
   "name": "@editable-ui/storage-local",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "license": "MIT",
   "files": ["dist"],
   "description": "Local filesystem image storage for editable-ui",
