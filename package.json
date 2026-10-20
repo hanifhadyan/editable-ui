@@ -9,7 +9,8 @@
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm build && node --test tests/security.test.cjs",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "release:version": "pnpm changeset version && pnpm install --lockfile-only"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
