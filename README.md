@@ -1,12 +1,12 @@
 # editable-ui
 
-Inline visual editing plugin for React/Next.js. Edit text, rich text, images, and collections directly on the page — no admin panel needed.
+Inline visual editing package for React/Next.js. Edit text, rich text, images, and collections directly on the page — no admin panel needed.
 
 📖 **[Full Implementation Guide →](./docs/guide.md)** — step-by-step setup, all components, real-world wine catalog example.
 
 ## How it works
 
-Wrap any element with an `Editable` component. When logged in as admin, hover shows an edit icon. Click to edit in place. Changes save to your chosen storage.
+Wrap content with an editable component. Admin edit controls stay visible and keyboard accessible. Changes save to your chosen storage.
 
 ```tsx
 <EditableText contentKey="hero.title" as="h1" className="text-4xl font-bold">
@@ -37,8 +37,9 @@ Interactive prompts will ask:
 - Which image storage (local filesystem / AWS S3 / Cloudflare R2 / MinIO)
 - Which auth provider (NextAuth.js / Clerk / Custom)
 - Which Next.js router (auto-detected)
+- For the module that exports `authOptions` if it cannot detect one
 
-Then automatically installs required packages, generates `editable.config.ts`, API routes, and `.env.example`.
+Then installs required packages, generates `editable.config.ts` or `.js`, API routes, and `.env.example`. It refuses to overwrite existing generated files and adds only missing environment keys on reruns.
 
 After init, wrap your app and start using components — see [Usage](#usage) below.
 
@@ -156,7 +157,7 @@ Use `onRowClick` and `onRowHover` to manage your own state. You own all markup a
 'use client'
 
 import { useState } from 'react'
-import { EditableCollection } from '@editable-ui/core'
+import { EditableCollection, sanitizeRichText } from '@editable-ui/core'
 
 export default function WinesPage() {
   const [modalItem, setModalItem] = useState(null)
@@ -199,7 +200,7 @@ export default function WinesPage() {
             <p className="font-semibold mt-1">{modalItem.price}</p>
             <div
               className="prose prose-sm mt-4"
-              dangerouslySetInnerHTML={{ __html: modalItem.description }}
+              dangerouslySetInnerHTML={{ __html: sanitizeRichText(modalItem.description) }}
             />
             <button
               onClick={() => setModalItem(null)}
@@ -231,7 +232,7 @@ The same item data flows to all three contexts — you decide what to show where
 
 ```tsx
 // app/wines/[id]/page.tsx
-import { useCollectionItem } from '@editable-ui/core'
+import { useCollectionItem, sanitizeRichText } from '@editable-ui/core'
 
 export default function WineDetailPage({ params }) {
   const item = useCollectionItem('wines', params.id)
@@ -245,7 +246,7 @@ export default function WineDetailPage({ params }) {
       <p className="text-gray-500 mt-1">{item.producer} · {item.country}</p>
       <div
         className="prose mt-6"
-        dangerouslySetInnerHTML={{ __html: item.description }}
+        dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }}
       />
     </div>
   )
@@ -272,12 +273,12 @@ const router = useRouter()
 | Interaction | Admin | Non-admin |
 |-------------|-------|-----------|
 | View table | ✅ | ✅ |
-| Double-click cell | inline edit | — |
+| Double-click or press Enter/Space on cell | inline edit | — |
 | Click row | fires `onRowClick` | fires `onRowClick` |
 | Hover row | fires `onRowHover` | fires `onRowHover` |
-| Click column header | rename label | — |
+| Activate the visible header button | rename label | — |
 | Add row | ✅ "+ Add row" button | — |
-| Delete row | ✅ 🗑 on row hover | — |
+| Delete row | ✅ always-visible 🗑 button | — |
 
 When `onRowClick` is not provided and `modal` prop is used, clicking opens the built-in modal with an auto-generated edit form for all fields.
 
@@ -286,7 +287,7 @@ When `onRowClick` is not provided and `modal` prop is used, clicking opens the b
 | Type | Edit UI |
 |------|---------|
 | `text` (default) | inline input |
-| `richtext` | textarea (Tiptap for inline cell edit) |
+| `richtext` | single-line table cell; textarea in the item modal |
 | `image` | file upload or URL paste |
 | `select` | dropdown with `options` array |
 
@@ -390,6 +391,6 @@ Always verify admin on the server side in your API routes — never trust the cl
 
 ## Requirements
 
-- React 17+
-- Node 18+
-- pnpm 8+ (for monorepo development)
+- React 18+
+- Node 22.11+ for workspace development (the SQLite adapter itself requires Node 20+)
+- pnpm 10+ for workspace development

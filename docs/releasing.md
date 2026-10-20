@@ -52,4 +52,4 @@ Repeat for each package. The release workflow uses GitHub OIDC and npm provenanc
 
 Each package publishes its build output and a package-specific README. Build and type checks run before the tarballs are created.
 
-The packages will be published without a declared license or a `LICENSE` file.
+All published packages declare the MIT license and include the repository's `LICENSE` file.

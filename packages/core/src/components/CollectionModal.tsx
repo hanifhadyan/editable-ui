@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CollectionItem, CollectionField } from '../types'
 import { useEditableContext } from '../EditableContext'
@@ -9,22 +9,35 @@ interface CollectionModalProps {
   item: CollectionItem
   schema: CollectionField[]
   onClose: () => void
-  onSave: (id: string, field: string, value: string) => void
+  onSave: (id: string, patch: Record<string, string>) => Promise<void> | void
   renderView?: (item: CollectionItem) => React.ReactNode
 }
 
 export function CollectionModal({ item, schema, onClose, onSave, renderView }: CollectionModalProps) {
-  const { isAdmin, uploadImage } = useEditableContext()
+  const { isAdmin, uploadImage, deleteImage } = useEditableContext()
   const [mode, setMode] = useState<'view' | 'edit'>(isAdmin ? 'edit' : 'view')
   const [draft, setDraft] = useState<CollectionItem>({ ...item })
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
   const overlayRef = useRef<HTMLDivElement>(null)
+  const pendingUploads = useRef(new Set<string>())
+  const uploadGeneration = useRef(0)
+
+  const close = useCallback(() => {
+    if (saving || uploading) return
+    uploadGeneration.current++
+    for (const url of pendingUploads.current) void deleteImage(url).catch(() => {})
+    pendingUploads.current.clear()
+    onClose()
+  }, [deleteImage, onClose, saving, uploading])
 
   // close on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [close])
 
   // lock body scroll
   useEffect(() => {
@@ -32,27 +45,61 @@ export function CollectionModal({ item, schema, onClose, onSave, renderView }: C
     return () => { document.body.style.overflow = '' }
   }, [])
 
-  const save = () => {
-    Object.entries(draft).forEach(([field, value]) => {
-      if (field !== 'id' && value !== item[field]) {
-        onSave(item.id, field, value as string)
-      }
-    })
-    onClose()
+  useEffect(() => () => {
+    uploadGeneration.current++
+    for (const url of pendingUploads.current) void deleteImage(url).catch(() => {})
+    pendingUploads.current.clear()
+  }, [deleteImage])
+
+  const save = async () => {
+    const patch = Object.fromEntries(Object.entries(draft).filter(
+      ([field, value]) => field !== 'id' && value !== item[field]
+    )) as Record<string, string>
+    if (Object.keys(patch).length === 0) return close()
+
+    setSaving(true)
+    setError('')
+    try {
+      await onSave(item.id, patch)
+      const retained = new Set(Object.values(draft))
+      await Promise.allSettled([...pendingUploads.current]
+        .filter(url => !retained.has(url))
+        .map(url => deleteImage(url)))
+      pendingUploads.current.clear()
+      onClose()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not save this item')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleImageUpload = async (field: string, file: File) => {
-    const url = await uploadImage(file)
-    setDraft(prev => ({ ...prev, [field]: url }))
+    const generation = uploadGeneration.current
+    setUploading(true)
+    setError('')
+    try {
+      const url = await uploadImage(file)
+      if (generation !== uploadGeneration.current) {
+        await deleteImage(url).catch(() => {})
+        return
+      }
+      pendingUploads.current.add(url)
+      setDraft(prev => ({ ...prev, [field]: url }))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not upload image')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const modal = (
     <div
       ref={overlayRef}
-      onClick={e => { if (e.target === overlayRef.current) onClose() }}
+      onClick={e => { if (e.target === overlayRef.current) close() }}
       style={overlayStyle}
     >
-      <div style={modalStyle}>
+      <div role="dialog" aria-modal="true" aria-label="Collection item" style={modalStyle}>
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -63,7 +110,7 @@ export function CollectionModal({ item, schema, onClose, onSave, renderView }: C
               <TabBtn active={mode === 'edit'} onClick={() => setMode('edit')}>Edit</TabBtn>
             )}
           </div>
-          <button onClick={onClose} style={closeBtnStyle}>✕</button>
+          <button onClick={close} disabled={saving || uploading} aria-label="Close collection item" style={closeBtnStyle}>✕</button>
         </div>
 
         {/* view mode — user's render prop */}
@@ -76,10 +123,11 @@ export function CollectionModal({ item, schema, onClose, onSave, renderView }: C
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {schema.map(f => (
               <div key={f.field} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={labelStyle}>{f.label}</label>
+                <label htmlFor={`collection-${f.field}`} style={labelStyle}>{f.label}</label>
 
                 {(!f.type || f.type === 'text') && (
                   <input
+                    id={`collection-${f.field}`}
                     value={draft[f.field] ?? ''}
                     onChange={e => setDraft(prev => ({ ...prev, [f.field]: e.target.value }))}
                     style={inputStyle}
@@ -88,6 +136,7 @@ export function CollectionModal({ item, schema, onClose, onSave, renderView }: C
 
                 {f.type === 'richtext' && (
                   <textarea
+                    id={`collection-${f.field}`}
                     value={draft[f.field] ?? ''}
                     rows={4}
                     onChange={e => setDraft(prev => ({ ...prev, [f.field]: e.target.value }))}
@@ -97,6 +146,7 @@ export function CollectionModal({ item, schema, onClose, onSave, renderView }: C
 
                 {f.type === 'select' && f.options && (
                   <select
+                    id={`collection-${f.field}`}
                     value={draft[f.field] ?? ''}
                     onChange={e => setDraft(prev => ({ ...prev, [f.field]: e.target.value }))}
                     style={inputStyle}
@@ -119,16 +169,21 @@ export function CollectionModal({ item, schema, onClose, onSave, renderView }: C
                       <label style={{ ...inputStyle, cursor: 'pointer', textAlign: 'center', padding: '6px 12px' }}>
                         Upload
                         <input
+                          aria-label={`${f.label} upload`}
                           type="file"
                           accept="image/png,image/jpeg,image/gif,image/webp"
                           style={{ display: 'none' }}
+                          disabled={saving || uploading}
                           onChange={e => {
                             const file = e.target.files?.[0]
-                            if (file) handleImageUpload(f.field, file)
+                              if (file) void handleImageUpload(f.field, file)
+                              e.target.value = ''
                           }}
                         />
                       </label>
                       <input
+                        id={`collection-${f.field}`}
+                        aria-label={`${f.label} URL`}
                         placeholder="or paste URL"
                         value={draft[f.field] ?? ''}
                         onChange={e => setDraft(prev => ({ ...prev, [f.field]: e.target.value }))}
@@ -141,9 +196,10 @@ export function CollectionModal({ item, schema, onClose, onSave, renderView }: C
             ))}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-              <button onClick={onClose} style={cancelBtnStyle}>Cancel</button>
-              <button onClick={save} style={saveBtnStyle}>Save</button>
+              <button onClick={close} disabled={saving || uploading} style={cancelBtnStyle}>Cancel</button>
+              <button onClick={save} disabled={saving || uploading} style={saveBtnStyle}>{saving ? 'Saving…' : 'Save'}</button>
             </div>
+            {error && <p role="alert" style={{ color: '#b00020', margin: '12px 0 0' }}>{error}</p>}
           </div>
         )}
       </div>

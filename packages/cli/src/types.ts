@@ -10,4 +10,5 @@ export interface InitOptions {
   auth: AuthProvider
   router: Router
   packageManager: PackageManager
+  authOptionsPath?: string
 }

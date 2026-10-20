@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
@@ -30,14 +30,8 @@ export function EditableRichText({
 
   const [state, setState] = useState<EditState>('idle')
   const [draft, setDraft] = useState(safeSavedValue)
-  const [hovered, setHovered] = useState(false)
   const [saving, setSaving] = useState(false)
-  const idleContainerRef = useRef<HTMLDivElement>(null)
-
-  // Detect cursor already inside on mount
-  useEffect(() => {
-    if (state === 'idle' && idleContainerRef.current?.matches(':hover')) setHovered(true)
-  }, [state])
+  const [error, setError] = useState('')
 
   // Sync external value when idle
   useEffect(() => {
@@ -77,15 +71,6 @@ export function EditableRichText({
     }
   }, [state]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Non-admin
-  if (!isAdmin) {
-    return React.createElement(Tag as string, {
-      className,
-      style,
-      dangerouslySetInnerHTML: { __html: safeSavedValue },
-    })
-  }
-
   const handlePreview = useCallback(() => {
     const html = sanitizeRichText(editor?.getHTML() ?? draft)
     setDraft(html)
@@ -96,39 +81,50 @@ export function EditableRichText({
   const handleSave = useCallback(async () => {
     const html = sanitizeRichText(state === 'editing' ? (editor?.getHTML() ?? draft) : draft)
     setSaving(true)
-    await setContent(contentKey, html, 'richtext')
-    setSaving(false)
     setDraft(html)
-    editor?.setEditable(false)
-    setState('idle')
+    setError('')
+    try {
+      await setContent(contentKey, html, 'richtext')
+      editor?.setEditable(false)
+      setState('idle')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not save rich text')
+    } finally {
+      setSaving(false)
+    }
   }, [state, editor, draft, contentKey, setContent])
 
   const handleCancel = useCallback(() => {
     editor?.commands.setContent(safeSavedValue)
     editor?.setEditable(false)
     setDraft(safeSavedValue)
+    setError('')
     setState('idle')
   }, [editor, safeSavedValue])
+
+  // Non-admin
+  if (!isAdmin) {
+    return React.createElement(Tag as string, {
+      className,
+      style,
+      dangerouslySetInnerHTML: { __html: safeSavedValue },
+    })
+  }
 
   // IDLE
   if (state === 'idle') {
     return (
       <div
-        ref={idleContainerRef}
         style={{ position: 'relative', width: '100%' }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
       >
         {React.createElement(Tag as string, {
           className,
           style,
           dangerouslySetInnerHTML: { __html: safeSavedValue },
         })}
-        {hovered && (
-          <button onClick={() => setState('editing')} style={editBtnStyle} title={`Edit "${contentKey}"`}>
-            ✏ Edit
-          </button>
-        )}
+        <button type="button" onClick={() => setState('editing')} style={editBtnStyle} aria-label={`Edit ${contentKey}`}>
+          ✏ Edit
+        </button>
       </div>
     )
   }
@@ -145,6 +141,7 @@ export function EditableRichText({
           onSave={handleSave}
           onCancel={handleCancel}
           saving={saving}
+          error={error}
         />
         <div style={{ position: 'relative', width: '100%' }}>
           <div style={previewLabelStyle}>👁 Preview — unsaved</div>
@@ -176,6 +173,7 @@ export function EditableRichText({
         onSave={handleSave}
         onCancel={handleCancel}
         saving={saving}
+        error={error}
       />
       <div style={{ position: 'relative', width: '100%', outline: '2px solid #111', borderRadius: 2, boxSizing: 'border-box' }}>
         <RichTextToolbar editor={editor} onSave={handleSave} onCancel={handleCancel} />

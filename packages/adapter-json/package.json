@@ -1,6 +1,7 @@
 {
   "name": "@editable-ui/adapter-json",
   "version": "0.0.6",
+  "license": "MIT",
   "files": ["dist"],
   "description": "JSON file adapter for editable-ui",
   "repository": { "type": "git", "url": "git+https://github.com/hanifhadyan/editable-ui.git" },

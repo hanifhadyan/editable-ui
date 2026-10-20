@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useEditableContext } from '../EditableContext'
 import type { CollectionItem, CollectionField } from '../types'
 
@@ -20,12 +20,23 @@ export function useCollection(contentKey: string, schemaFallback: CollectionFiel
   const itemsRaw = content[contentKey]?.value
   const schemaRaw = content[`${contentKey}.__schema`]?.value
 
-  const items = parseItems(itemsRaw)
-  const schema = parseSchema(schemaRaw, schemaFallback)
+  const items = useMemo(() => parseItems(itemsRaw), [itemsRaw])
+  const schema = useMemo(() => parseSchema(schemaRaw, schemaFallback), [schemaRaw, schemaFallback])
+  const latestItems = useRef(items)
+  const confirmedItems = useRef(items)
+  const pendingCount = useRef(0)
+  const pendingWrite = useRef(Promise.resolve())
+
+  useEffect(() => {
+    if (pendingCount.current === 0) {
+      latestItems.current = items
+      confirmedItems.current = items
+    }
+  }, [items, itemsRaw])
 
   const saveItems = useCallback(
-    (next: CollectionItem[]) => setContent(contentKey, JSON.stringify(next), 'collection'),
-    [contentKey, setContent]
+    (next: CollectionItem[]) => setContent(contentKey, JSON.stringify(next), 'collection', schema),
+    [contentKey, schema, setContent]
   )
 
   const saveSchema = useCallback(
@@ -34,22 +45,39 @@ export function useCollection(contentKey: string, schemaFallback: CollectionFiel
     [contentKey, setContent]
   )
 
+  const updateItems = useCallback((change: (current: CollectionItem[]) => CollectionItem[]) => {
+    const next = change(latestItems.current)
+    if (next === latestItems.current) return Promise.resolve()
+    latestItems.current = next
+    pendingCount.current++
+    const write = pendingWrite.current.then(() => saveItems(next))
+    const result = write.then(() => {
+      confirmedItems.current = next
+    }, error => {
+      if (latestItems.current === next) latestItems.current = confirmedItems.current
+      throw error
+    }).finally(() => { pendingCount.current-- })
+    pendingWrite.current = result.catch(() => {})
+    return result
+  }, [saveItems])
+
   const addItem = useCallback(() => {
     const blank: CollectionItem = { id: crypto.randomUUID() }
     schema.forEach(f => { blank[f.field] = '' })
-    saveItems([...items, blank])
-  }, [items, schema, saveItems])
+    return updateItems(current => [...current, blank])
+  }, [schema, updateItems])
 
   const updateItem = useCallback(
-    (id: string, field: string, value: string) => {
-      saveItems(items.map(item => item.id === id ? { ...item, [field]: value } : item))
+    (id: string, fieldOrPatch: string | Record<string, string>, value?: string) => {
+      const patch = typeof fieldOrPatch === 'string' ? { [fieldOrPatch]: value ?? '' } : fieldOrPatch
+      return updateItems(current => current.map(item => item.id === id ? { ...item, ...patch } : item))
     },
-    [items, saveItems]
+    [updateItems]
   )
 
   const deleteItem = useCallback(
-    (id: string) => saveItems(items.filter(item => item.id !== id)),
-    [items, saveItems]
+    (id: string) => updateItems(current => current.filter(item => item.id !== id)),
+    [updateItems]
   )
 
   const updateSchema = useCallback(

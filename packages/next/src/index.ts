@@ -1,7 +1,8 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { MAX_UPLOAD_SIZE, sanitizeRichText } from '@editable-ui/core'
-import type { ContentAdapter, ContentType, StorageAdapter } from '@editable-ui/core'
+import { MAX_UPLOAD_SIZE, sanitizeCollectionValue, sanitizeRichText } from '@editable-ui/core'
+import type { CollectionField, ContentAdapter, ContentType, StorageAdapter } from '@editable-ui/core'
 
 export { MAX_UPLOAD_SIZE }
 export const MAX_UPLOAD_REQUEST_SIZE = 14 * 1024 * 1024
@@ -13,7 +14,7 @@ const CONTENT_TYPES = new Set([
 type RequestLike = {
   url?: string
   headers: Headers | Record<string, string | string[] | undefined>
-  socket?: any
+  socket?: object
 }
 
 function getHeader(req: RequestLike, name: string): string | undefined {
@@ -36,7 +37,8 @@ export function isSameOriginRequest(req: RequestLike): boolean {
       requestOrigin = target.origin
     } else {
       const host = (getHeader(req, 'x-forwarded-host') ?? getHeader(req, 'host'))?.split(',')[0].trim()
-      const protocol = (getHeader(req, 'x-forwarded-proto') ?? (req.socket?.encrypted ? 'https' : 'http'))
+      const encrypted = req.socket && 'encrypted' in req.socket && req.socket.encrypted === true
+      const protocol = (getHeader(req, 'x-forwarded-proto') ?? (encrypted ? 'https' : 'http'))
         .split(',')[0].trim().toLowerCase()
       if (!host || !['http', 'https'].includes(protocol)) return false
       const target = new URL(`${protocol}://${host}`)
@@ -59,6 +61,49 @@ export function isContentType(value: unknown): value is ContentType {
   return typeof value === 'string' && CONTENT_TYPES.has(value)
 }
 
+export function isCollectionSchema(value: unknown): value is CollectionField[] {
+  return Array.isArray(value) && value.every(field =>
+    field && typeof field === 'object' &&
+    typeof field.field === 'string' && typeof field.label === 'string' &&
+    (field.type === undefined || ['text', 'richtext', 'image', 'select'].includes(field.type)) &&
+    (field.options === undefined || Array.isArray(field.options) && field.options.every((option: unknown) => typeof option === 'string'))
+  )
+}
+
+export async function prepareCollectionValue(
+  adapter: ContentAdapter,
+  key: string,
+  value: string,
+  requestedSchema?: unknown
+): Promise<string> {
+  const schemaKey = `${key}.__schema`
+  const stored = await adapter.get(schemaKey)
+  let schema: CollectionField[] | undefined
+  if (stored) {
+    if (stored.type !== 'collection-schema') throw new TypeError('Invalid collection schema record')
+    try {
+      const parsed: unknown = JSON.parse(stored.value)
+      if (!isCollectionSchema(parsed)) throw new TypeError('Invalid collection schema')
+      schema = parsed
+    } catch {
+      throw new TypeError('Invalid collection schema')
+    }
+  } else if (requestedSchema !== undefined) {
+    if (!isCollectionSchema(requestedSchema)) throw new TypeError('Invalid collection schema')
+    schema = requestedSchema
+  }
+
+  if (!schema) return value
+  let safeValue: string
+  try {
+    safeValue = sanitizeCollectionValue(value, schema)
+  } catch {
+    throw new TypeError('Invalid collection content')
+  }
+  if (!stored) await adapter.set(schemaKey, JSON.stringify(schema), 'collection-schema')
+  return safeValue
+}
+
 export class RequestBodyError extends Error {
   constructor(message: string, readonly statusCode: 400 | 413) {
     super(message)
@@ -76,7 +121,120 @@ export function createInitializer(initialize: () => Promise<void>): () => Promis
   }
 }
 
-export async function readJsonBody(req: Request, maxBytes: number): Promise<any> {
+const contentMutationQueues = new WeakMap<ContentAdapter, Promise<void>>()
+const activeContentMutations = new AsyncLocalStorage<Set<ContentAdapter>>()
+
+export function withContentMutationLock<T>(adapter: ContentAdapter, mutation: () => Promise<T>): Promise<T> {
+  if (activeContentMutations.getStore()?.has(adapter)) return mutation()
+  const previous = contentMutationQueues.get(adapter) ?? Promise.resolve()
+  const result = previous.then(() => {
+    const active = activeContentMutations.getStore()
+    if (active?.has(adapter)) return mutation()
+    const run = () => activeContentMutations.run(new Set([...(active ?? []), adapter]), mutation)
+    if (adapter.withSharedContentLock && adapter.supportsCrossProcessMutationLock !== false) {
+      return adapter.withSharedContentLock(run)
+    }
+    return run()
+  })
+  contentMutationQueues.set(adapter, result.then(() => undefined, () => undefined))
+  return result
+}
+
+function supportsSafeUploadCleanup(adapter: ContentAdapter, storage: StorageAdapter | undefined): storage is StorageAdapter & Required<Pick<StorageAdapter, 'owns' | 'exists'>> {
+  return Boolean(
+    adapter.withSharedContentLock && adapter.supportsCrossProcessMutationLock !== false &&
+    storage?.owns && storage.exists
+  )
+}
+
+function collectStrings(value: string): Set<string> {
+  const strings = new Set([value])
+  const visit = (item: unknown) => {
+    if (typeof item === 'string') strings.add(item)
+    else if (Array.isArray(item)) item.forEach(visit)
+    else if (item && typeof item === 'object') Object.values(item).forEach(visit)
+  }
+  try { visit(JSON.parse(value)) } catch { /* keep the original value as a possible URL */ }
+  return strings
+}
+
+async function removeUnreferencedUploads(
+  adapter: ContentAdapter,
+  storage: StorageAdapter | undefined,
+  previousValue: string | undefined
+): Promise<void> {
+  if (!supportsSafeUploadCleanup(adapter, storage) || !previousValue) return
+  const urls = [...collectStrings(previousValue)].filter(url => storage.owns?.(url))
+  for (const url of urls) {
+    try {
+      await deleteUnreferencedUpload(adapter, storage, url)
+    } catch (error) {
+      console.error('[editable-ui] Could not delete an unused upload', error)
+    }
+  }
+}
+
+export async function writeContent(
+  adapter: ContentAdapter,
+  storage: StorageAdapter | undefined,
+  key: string,
+  value: string,
+  type: ContentType,
+  schema?: unknown
+): Promise<void> {
+  let previousValue: string | undefined
+  await withContentMutationLock(adapter, async () => {
+    const previous = await adapter.get(key)
+    previousValue = previous?.value
+    let safeValue = type === 'richtext' ? sanitizeRichText(value) : value
+    if (type === 'collection') safeValue = await prepareCollectionValue(adapter, key, value, schema)
+    if (type === 'collection-schema') {
+      let parsed: unknown
+      try { parsed = JSON.parse(value) } catch { throw new TypeError('Invalid collection schema') }
+      if (!isCollectionSchema(parsed)) throw new TypeError('Invalid collection schema')
+    }
+    if (supportsSafeUploadCleanup(adapter, storage)) {
+      for (const url of collectStrings(safeValue)) {
+        if (storage.owns(url) && !await storage.exists(url)) {
+          throw new TypeError('Referenced upload no longer exists')
+        }
+      }
+    }
+    await adapter.set(key, safeValue, type)
+  })
+  await removeUnreferencedUploads(adapter, storage, previousValue)
+}
+
+export async function deleteContent(
+  adapter: ContentAdapter,
+  storage: StorageAdapter | undefined,
+  key: string
+): Promise<void> {
+  let previousValue: string | undefined
+  await withContentMutationLock(adapter, async () => {
+    const previous = await adapter.get(key)
+    previousValue = previous?.value
+    await adapter.delete(key)
+  })
+  await removeUnreferencedUploads(adapter, storage, previousValue)
+}
+
+export async function deleteUnreferencedUpload(
+  adapter: ContentAdapter,
+  storage: StorageAdapter,
+  url: string
+): Promise<boolean> {
+  if (!supportsSafeUploadCleanup(adapter, storage)) return false
+  return withContentMutationLock(adapter, async () => {
+    if (!storage.owns(url) || !await storage.exists(url)) return false
+    const records = await adapter.getAll()
+    if (Object.values(records).some(entry => typeof entry?.value === 'string' && entry.value.includes(url))) return false
+    await storage.delete(url)
+    return true
+  })
+}
+
+export async function readJsonBody(req: Request, maxBytes: number): Promise<Record<string, unknown>> {
   const contentLength = req.headers.get('content-length')
   if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
     throw new RequestBodyError('Request body is too large', 413)
@@ -103,11 +261,16 @@ export async function readJsonBody(req: Request, maxBytes: number): Promise<any>
     bytes.set(chunk, offset)
     offset += chunk.byteLength
   }
+  let parsed: unknown
   try {
-    return JSON.parse(new TextDecoder().decode(bytes))
+    parsed = JSON.parse(new TextDecoder().decode(bytes))
   } catch {
     throw new RequestBodyError('Invalid JSON body', 400)
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new RequestBodyError('JSON body must be an object', 400)
+  }
+  return parsed as Record<string, unknown>
 }
 
 export class ImageUploadError extends Error {
@@ -162,10 +325,11 @@ export async function storeUploadedImage(storage: StorageAdapter, encoded: unkno
 
 interface CreateHandlerOptions {
   adapter: ContentAdapter
+  storage?: StorageAdapter
   isAdmin: (req: NextApiRequest, res: NextApiResponse) => boolean | Promise<boolean>
 }
 
-export function createContentHandler({ adapter, isAdmin }: CreateHandlerOptions) {
+export function createContentHandler({ adapter, storage, isAdmin }: CreateHandlerOptions) {
   const initialize = createInitializer(() => adapter.initialize())
 
   return async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -184,12 +348,24 @@ export function createContentHandler({ adapter, isAdmin }: CreateHandlerOptions)
     if (req.method === 'POST') {
       if (!isJsonRequest(req)) return res.status(415).json({ error: 'Expected JSON request' })
       if (!isSameOriginRequest(req)) return res.status(403).json({ error: 'Invalid origin' })
-      const { key, value, type } = req.body ?? {}
+      const { key, value, type, schema } = req.body ?? {}
       if (typeof key !== 'string' || !key || typeof value !== 'string' || !isContentType(type)) {
         return res.status(400).json({ error: 'Missing key, value, or type' })
       }
+      if (type === 'collection-schema') {
+        try {
+          if (!isCollectionSchema(JSON.parse(value))) return res.status(400).json({ error: 'Invalid collection schema' })
+        } catch {
+          return res.status(400).json({ error: 'Invalid collection schema' })
+        }
+      }
       await initialize()
-      await adapter.set(key, type === 'richtext' ? sanitizeRichText(value) : value, type)
+      try {
+        await writeContent(adapter, storage, key, value, type, schema)
+      } catch (error) {
+        if (error instanceof TypeError) return res.status(400).json({ error: error.message })
+        throw error
+      }
       return res.status(200).json({ ok: true })
     }
 
@@ -199,7 +375,7 @@ export function createContentHandler({ adapter, isAdmin }: CreateHandlerOptions)
       const { key } = req.body ?? {}
       if (typeof key !== 'string' || !key) return res.status(400).json({ error: 'Missing key' })
       await initialize()
-      await adapter.delete(key)
+      await deleteContent(adapter, storage, key)
       return res.status(200).json({ ok: true })
     }
 
@@ -209,13 +385,16 @@ export function createContentHandler({ adapter, isAdmin }: CreateHandlerOptions)
 
 export function createUploadHandler({
   storage,
+  adapter,
   isAdmin,
 }: {
   storage: StorageAdapter
+  adapter?: ContentAdapter
   isAdmin: (req: NextApiRequest, res: NextApiResponse) => boolean | Promise<boolean>
 }) {
+  const initialize = adapter ? createInitializer(() => adapter.initialize()) : undefined
   return async function handler(req: NextApiRequest, res: NextApiResponse) {
-    if (req.method !== 'POST') {
+    if (req.method !== 'POST' && req.method !== 'DELETE') {
       return res.status(405).json({ error: 'Method not allowed' })
     }
 
@@ -226,6 +405,15 @@ export function createUploadHandler({
 
     if (!isJsonRequest(req)) return res.status(415).json({ error: 'Expected JSON request' })
     if (!isSameOriginRequest(req)) return res.status(403).json({ error: 'Invalid origin' })
+
+    if (req.method === 'DELETE') {
+      if (!adapter) return res.status(501).json({ error: 'Upload cleanup is not configured' })
+      const url = req.body?.url
+      if (typeof url !== 'string' || !url) return res.status(400).json({ error: 'Missing upload URL' })
+      await initialize?.()
+      const deleted = await deleteUnreferencedUpload(adapter, storage, url)
+      return res.status(200).json({ ok: true, deleted })
+    }
 
     try {
       const url = await storeUploadedImage(storage, req.body?.file)

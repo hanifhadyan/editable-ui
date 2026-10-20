@@ -25,12 +25,30 @@ export class LocalStorageAdapter implements StorageAdapter {
     return `${this.publicPath}/${name}`
   }
 
+  owns(url: string): boolean {
+    const prefix = `${this.publicPath}/`
+    return url.startsWith(prefix) && /^[a-f0-9]{16}\.(?:png|jpg|gif|webp)$/.test(url.slice(prefix.length))
+  }
+
+  async exists(url: string): Promise<boolean> {
+    if (!this.owns(url)) return false
+    try {
+      await fs.access(path.join(this.dir, url.slice(`${this.publicPath}/`.length)))
+      return true
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return false
+      throw error
+    }
+  }
+
   async delete(url: string): Promise<void> {
-    const filename = path.basename(url)
+    if (!this.owns(url)) return
+    const filename = url.slice(`${this.publicPath}/`.length)
     try {
       await fs.unlink(path.join(this.dir, filename))
-    } catch {
-      // ignore if file doesn't exist
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return
+      throw error
     }
   }
 }

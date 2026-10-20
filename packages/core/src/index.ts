@@ -1,5 +1,5 @@
 export { EditableProvider, useEditableContext } from './EditableContext'
-export { sanitizeRichText } from './sanitize'
+export { sanitizeRichText, sanitizeCollectionValue } from './sanitize'
 export { MAX_UPLOAD_SIZE } from './types'
 export { FloatingEditBar } from './components/FloatingEditBar'
 export { useEditable } from './useEditable'

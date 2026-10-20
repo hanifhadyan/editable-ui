@@ -160,9 +160,9 @@ All className and style props pass through to the element. In non-edit mode it r
 ### Edit behavior
 
 - **Non-admin:** renders as plain element, no interaction.
-- **Admin hover:** pencil icon appears top-right.
-- **Admin click icon:** element becomes `contenteditable`.
-- **Enter or blur:** saves. **Escape:** cancels.
+- **Admin:** a visible Edit button appears top-right.
+- **Admin click Edit:** element becomes `contenteditable`.
+- **Save:** persists the edit. **Escape:** cancels.
 
 ### Naming convention for contentKey
 
@@ -212,12 +212,14 @@ B  I  U  S  |  H1  H2  H3  |  •≡  1≡  "  </>  |  ←  ↔  →  |  Save  C
 
 ### Rendering saved HTML
 
-The saved value is an HTML string. Render it with `dangerouslySetInnerHTML` when using `useCollectionItem` or building custom detail pages:
+The saved value is an HTML string. Sanitize legacy or custom collection content before rendering it with `dangerouslySetInnerHTML`:
 
 ```tsx
+import { sanitizeRichText } from '@editable-ui/core'
+
 <div
   className="prose"
-  dangerouslySetInnerHTML={{ __html: item.description }}
+  dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }}
 />
 ```
 
@@ -242,8 +244,8 @@ import { EditableImage } from '@editable-ui/core'
 
 ### Edit behavior
 
-- **Admin hover:** pencil icon appears.
-- **Admin click icon:** modal opens with two options:
+- **Admin:** a visible Edit button appears.
+- **Admin click Edit:** modal opens with two options:
   - Upload file (sent to your configured image storage)
   - Paste image URL
 
@@ -279,10 +281,10 @@ import { EditableCollection } from '@editable-ui/core'
 ```
 
 **What admin sees:**
-- Table with editable cells (double-click to edit)
+- Table with editable cells (double-click or press Enter/Space to edit)
 - `+ Add row` button at bottom
-- 🗑 delete button on row hover
-- Click column header to rename it
+- Always-visible 🗑 delete button on each row
+- Visible header button to rename each column
 
 **What non-admin sees:**
 - Normal read-only table
@@ -314,7 +316,7 @@ Split layout: left table, right sticky image panel. Image swaps on row hover.
 'use client'
 
 import { useState } from 'react'
-import { EditableCollection } from '@editable-ui/core'
+import { EditableCollection, sanitizeRichText } from '@editable-ui/core'
 
 export default function WinesPage() {
   const [hoveredItem, setHoveredItem] = useState(null)
@@ -409,7 +411,7 @@ export default function WinesPage() {
               <p className="text-emerald-600 font-semibold mt-2">{modalItem.price}</p>
               <div
                 className="prose prose-sm mt-4"
-                dangerouslySetInnerHTML={{ __html: modalItem.description }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(modalItem.description) }}
               />
               <button
                 onClick={() => setModalItem(null)}
@@ -452,7 +454,7 @@ const router = useRouter()
 // app/wines/[id]/page.tsx
 'use client'
 
-import { useCollectionItem } from '@editable-ui/core'
+import { useCollectionItem, sanitizeRichText } from '@editable-ui/core'
 
 export default function WineDetailPage({ params }) {
   const item = useCollectionItem('wines', params.id)
@@ -479,7 +481,7 @@ export default function WineDetailPage({ params }) {
       {/* rich text content */}
       <div
         className="prose prose-lg mt-8"
-        dangerouslySetInnerHTML={{ __html: item.description }}
+        dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }}
       />
 
       {/* any other field */}
@@ -500,7 +502,7 @@ All three contexts from one collection. Most powerful setup.
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { EditableCollection } from '@editable-ui/core'
+import { EditableCollection, sanitizeRichText } from '@editable-ui/core'
 
 const schema = [
   { field: 'name',        label: 'Wine',        visible: true },
@@ -559,7 +561,7 @@ export default function WinesPage() {
               </p>
               <p className="text-emerald-600 font-semibold mt-2">{modalItem.price}</p>
               <div className="prose prose-sm mt-4"
-                   dangerouslySetInnerHTML={{ __html: modalItem.description }} />
+                   dangerouslySetInnerHTML={{ __html: sanitizeRichText(modalItem.description) }} />
               <div className="flex gap-3 mt-6">
                 <button onClick={() => router.push(`/wines/${modalItem.id}`)}
                         className="flex-1 py-3 border border-black text-black rounded-xl font-medium">
@@ -739,6 +741,8 @@ const storage = new S3StorageAdapter({
 })
 ```
 
+Automatic upload cleanup runs only when the content adapter provides a cross-process mutation lock and the storage adapter implements both `owns(url)` and `exists(url)`. The PostgreSQL, MySQL, and SQLite adapters provide shared locking. MongoDB cleanup is enabled on replica-set or sharded deployments; standalone MongoDB, the JSON adapter, and custom content adapters without a shared lock leave uploads in storage. Custom storage adapters without both ownership and existence checks also leave uploads in storage. This prevents a stale reference scan from deleting an upload that a concurrent content write is using.
+
 ### Cloudflare R2 (recommended — no egress fees)
 
 ```ts
@@ -818,7 +822,7 @@ export default function RootLayout({ children }) {
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { EditableCollection } from '@editable-ui/core'
+import { EditableCollection, sanitizeRichText } from '@editable-ui/core'
 
 const schema = [
   { field: 'name',        label: 'Wine',        visible: true },
@@ -909,7 +913,7 @@ export default function WinesPage() {
               <p className="text-lg font-semibold mt-3">{modalItem.price}</p>
               <div
                 className="prose prose-sm mt-4 flex-1 overflow-y-auto"
-                dangerouslySetInnerHTML={{ __html: modalItem.description }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(modalItem.description) }}
               />
               <button
                 onClick={() => router.push(`/wines/${modalItem.id}`)}
@@ -931,7 +935,7 @@ export default function WinesPage() {
 ```tsx
 'use client'
 
-import { useCollectionItem } from '@editable-ui/core'
+import { useCollectionItem, sanitizeRichText } from '@editable-ui/core'
 import { useRouter } from 'next/navigation'
 
 export default function WineDetailPage({ params }) {
@@ -985,7 +989,7 @@ export default function WineDetailPage({ params }) {
           {item.description && (
             <div
               className="prose prose-lg mt-8 text-gray-700"
-              dangerouslySetInnerHTML={{ __html: item.description }}
+              dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }}
             />
           )}
 
@@ -996,7 +1000,7 @@ export default function WineDetailPage({ params }) {
               </h3>
               <div
                 className="prose prose-sm text-gray-600"
-                dangerouslySetInnerHTML={{ __html: item.tasting }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.tasting) }}
               />
             </>
           )}
@@ -1034,7 +1038,7 @@ import { EditableGallery } from '@editable-ui/core'
 | Interaction | Result |
 |-------------|--------|
 | Click **+ Add images** | File picker — supports multi-select |
-| Hover image | Shows drag handle (top-left) and ✕ delete (top-right) |
+| Edit gallery | Shows drag handle (top-left) and ✕ delete (top-right) for each image |
 | Drag image | Reorders within grid |
 | Click ✕ | Removes image from gallery |
 

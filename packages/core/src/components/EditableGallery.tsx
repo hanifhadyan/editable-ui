@@ -4,6 +4,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react'
 import {
   DndContext,
   closestCenter,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -14,6 +15,7 @@ import {
   rectSortingStrategy,
   useSortable,
   arrayMove,
+  sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useEditableContext } from '../EditableContext'
@@ -56,20 +58,17 @@ export function EditableGallery({
   editContainerClassName,
   editGridColumns = 3,
 }: EditableGalleryProps) {
-  const { isAdmin, content, setContent, uploadImage } = useEditableContext()
+  const { isAdmin, content, setContent, uploadImage, deleteImage } = useEditableContext()
   const savedImages = parseImages(content[contentKey]?.value)
 
   const [state, setState] = useState<EditState>('idle')
   const [draft, setDraft] = useState<GalleryImage[]>(savedImages)
-  const [hovered, setHovered] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const idleContainerRef = useRef<HTMLDivElement>(null)
-
-  // Detect cursor already inside on mount (page navigation mid-hover)
-  useEffect(() => {
-    if (state === 'idle' && idleContainerRef.current?.matches(':hover')) setHovered(true)
-  }, [state])
+  const createdUploads = useRef(new Set<string>())
+  const uploadGeneration = useRef(0)
 
   // Sync draft when external value changes (idle only)
   useEffect(() => {
@@ -87,26 +86,48 @@ export function EditableGallery({
     return () => window.removeEventListener('beforeunload', handler)
   }, [state])
 
+  useEffect(() => () => {
+    uploadGeneration.current++
+    for (const url of createdUploads.current) void deleteImage(url).catch(() => {})
+    createdUploads.current.clear()
+  }, [deleteImage])
+
   const handleAddImages = useCallback(
     async (files: File[]) => {
-      const uploaded: GalleryImage[] = await Promise.all(
-        files.map(async file => ({
-          id: crypto.randomUUID(),
-          src: await uploadImage(file),
-          alt: file.name.replace(/\.[^.]+$/, ''),
-          caption: '',
-        }))
-      )
-      setDraft(prev => [...prev, ...uploaded])
+      const generation = uploadGeneration.current
+      setUploading(true)
+      try {
+        const results = await Promise.allSettled(
+          files.map(async file => ({
+            id: crypto.randomUUID(),
+            src: await uploadImage(file),
+            alt: file.name.replace(/\.[^.]+$/, ''),
+            caption: '',
+          }))
+        )
+        const uploaded = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
+        if (generation !== uploadGeneration.current) {
+          await Promise.allSettled(uploaded.map(image => deleteImage(image.src)))
+          return
+        }
+        uploaded.forEach(image => createdUploads.current.add(image.src))
+        setDraft(prev => [...prev, ...uploaded])
+        setError(uploaded.length === files.length ? '' : `Uploaded ${uploaded.length} of ${files.length} images${uploaded.length ? '; successful uploads remain in the draft.' : '.'}`)
+      } finally {
+        setUploading(false)
+      }
     },
-    [uploadImage]
+    [deleteImage, uploadImage]
   )
 
   const handleRemoveImage = useCallback((id: string) => {
     setDraft(prev => prev.filter(img => img.id !== id))
   }, [])
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event
@@ -119,16 +140,32 @@ export function EditableGallery({
   }, [])
 
   const handleSave = useCallback(async () => {
+    if (uploading) return
     setSaving(true)
-    await setContent(contentKey, JSON.stringify(draft), 'collection')
-    setSaving(false)
-    setState('idle')
-  }, [contentKey, setContent, draft])
+    setError('')
+    try {
+      await setContent(contentKey, JSON.stringify(draft), 'collection')
+      const retained = new Set(draft.map(image => image.src))
+      await Promise.allSettled([...createdUploads.current]
+        .filter(url => !retained.has(url))
+        .map(url => deleteImage(url)))
+      createdUploads.current.clear()
+      setState('idle')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not save gallery changes')
+    } finally {
+      setSaving(false)
+    }
+  }, [contentKey, deleteImage, setContent, draft, uploading])
 
   const handleCancel = useCallback(() => {
+    uploadGeneration.current++
+    for (const url of createdUploads.current) void deleteImage(url).catch(() => {})
+    createdUploads.current.clear()
     setDraft(savedImages)
+    setError('')
     setState('idle')
-  }, [savedImages]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [deleteImage, savedImages])
 
   const defaultGrid = (images: GalleryImage[]) => (
     <div
@@ -164,17 +201,12 @@ export function EditableGallery({
   if (state === 'idle') {
     return (
       <div
-        ref={idleContainerRef}
         style={{ position: 'relative', width: '100%' }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
       >
         {viewer(savedImages)}
-        {hovered && (
-          <button onClick={() => setState('editing')} style={editGalleryBtnStyle} title="Edit gallery images">
-            ✏ Edit Gallery
-          </button>
-        )}
+        <button type="button" onClick={() => setState('editing')} disabled={uploading} style={editGalleryBtnStyle} aria-label="Edit gallery images">
+          ✏ Edit Gallery
+        </button>
       </div>
     )
   }
@@ -198,6 +230,8 @@ export function EditableGallery({
           onSave={handleSave}
           onCancel={handleCancel}
           saving={saving}
+          error={error}
+          uploading={uploading}
         />
         <div className={editContainerClassName} style={{ position: 'relative', width: '100%' }}>
           <div style={previewLabelStyle}>👁 Preview — unsaved</div>
@@ -218,6 +252,8 @@ export function EditableGallery({
         onSave={handleSave}
         onCancel={handleCancel}
         saving={saving}
+        error={error}
+        uploading={uploading}
       />
 
       <div
@@ -241,7 +277,7 @@ export function EditableGallery({
                   imageClassName={imageClassName}
                 />
               ))}
-              <button onClick={() => fileInputRef.current?.click()} style={addBtnStyle} title="Add images">
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} style={addBtnStyle} aria-label="Add images">
                 <span style={{ fontSize: 28, color: '#bbb', lineHeight: 1 }}>+</span>
                 <span style={{ fontSize: 11, color: '#bbb', marginTop: 4, fontFamily: 'sans-serif' }}>Add images</span>
               </button>
@@ -257,7 +293,7 @@ export function EditableGallery({
           style={{ display: 'none' }}
           onChange={e => {
             const files = Array.from(e.target.files ?? [])
-            if (files.length) handleAddImages(files)
+            if (files.length) void handleAddImages(files)
             e.target.value = ''
           }}
         />
@@ -277,23 +313,20 @@ function SortableItem({
   renderImage?: (image: GalleryImage, index: number) => React.ReactNode
   imageClassName: string
 }) {
-  const [hovered, setHovered] = useState(false)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: image.id })
 
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, position: 'relative', cursor: 'grab' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       {...attributes}
       {...listeners}
     >
       {renderImage ? renderImage(image, index) : <img src={image.src} alt={image.alt ?? ''} className={imageClassName} />}
-      {hovered && !isDragging && (
+      {!isDragging && (
         <>
-          <div style={dragHintStyle}>⠿</div>
-          <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onRemove() }} style={deleteBtnStyle} title="Remove image">✕</button>
+          <div aria-hidden="true" style={dragHintStyle}>⠿</div>
+          <button type="button" onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onRemove() }} style={deleteBtnStyle} aria-label={`Remove image ${index + 1}`}>✕</button>
         </>
       )}
     </div>

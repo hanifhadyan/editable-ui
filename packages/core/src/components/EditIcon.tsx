@@ -11,6 +11,8 @@ export function EditIcon({ onClick }: EditIconProps) {
         e.stopPropagation()
         onClick()
       }}
+      type="button"
+      aria-label="Edit image"
       style={{
         position: 'absolute',
         top: 4,

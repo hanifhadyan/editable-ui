@@ -48,38 +48,44 @@ const STORAGE_INIT: Record<string, string> = {
 }
 
 const AUTH_IMPORT: Record<string, string> = {
-  'next-auth': `import { getServerSession } from 'next-auth'
-import { authOptions } from './pages/api/auth/[...nextauth]'`,
+  'next-auth': `import { getServerSession } from 'next-auth'`,
   clerk: `import { getAuth } from '@clerk/nextjs/server'`,
   custom: `// TODO: import your auth helper`,
 }
 
-const IS_ADMIN_FN: Record<string, string> = {
-  'next-auth': `async (req: any, res?: any) => {
+function adminFunction(auth: InitOptions['auth'], useTypeScript: boolean): string {
+  const requestType = useTypeScript ? ': any' : ''
+  const responseParam = useTypeScript ? 'res?: any' : 'res'
+  if (auth === 'next-auth') return `async (req${requestType}, ${responseParam}) => {
   const session = res
     ? await getServerSession(req, res, authOptions)
     : await getServerSession(authOptions)
   return session?.user?.role === 'admin'
-}`,
-  clerk: `(req: any) => {
+}`
+  if (auth === 'clerk') return `(req${requestType}) => {
   const { userId, orgRole } = getAuth(req)
   return !!userId && orgRole === 'org:admin'
-}`,
-  custom: `(req: any) => {
+}`
+  return `(req${requestType}) => {
   // TODO: implement your admin check
   // e.g. verify JWT, check session, etc.
   return false
-}`,
+}`
 }
 
-export function generateConfig(opts: InitOptions): string {
+export function generateConfig(opts: InitOptions, useTypeScript = true): string {
+  const authImport = opts.auth === 'next-auth'
+    ? `${AUTH_IMPORT[opts.auth]}\nimport { authOptions } from '${opts.authOptionsPath ?? (opts.router === 'pages' ? './pages/api/auth/[...nextauth]' : './auth')}'`
+    : AUTH_IMPORT[opts.auth]
+  const dbInit = useTypeScript ? DB_INIT[opts.db] : DB_INIT[opts.db].replace(/!/g, '')
+  const storageInit = useTypeScript ? STORAGE_INIT[opts.storage] : STORAGE_INIT[opts.storage].replace(/!/g, '')
   return `${DB_IMPORT[opts.db]}
 ${STORAGE_IMPORT[opts.storage]}
-${AUTH_IMPORT[opts.auth]}
+${authImport}
 
-export const adapter = ${DB_INIT[opts.db]}
-export const storage = ${STORAGE_INIT[opts.storage]}
+export const adapter = ${dbInit}
+export const storage = ${storageInit}
 
-export const isAdmin = ${IS_ADMIN_FN[opts.auth]}
+export const isAdmin = ${adminFunction(opts.auth, useTypeScript)}
 `
 }

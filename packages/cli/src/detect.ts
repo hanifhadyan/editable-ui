@@ -27,3 +27,22 @@ export function detectNextJs(): boolean {
 export function isTypeScript(): boolean {
   return fs.existsSync(path.resolve('tsconfig.json'))
 }
+
+export function detectAuthOptionsPath(router: Router, root = process.cwd()): string | undefined {
+  const base = router === 'pages'
+    ? ['pages/api/auth/[...nextauth]', 'src/pages/api/auth/[...nextauth]', 'src/lib/auth', 'lib/auth', 'src/auth', 'auth']
+    : ['src/auth', 'auth', 'src/lib/auth', 'lib/auth', 'app/api/auth/[...nextauth]/route', 'src/app/api/auth/[...nextauth]/route']
+  const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs']
+
+  for (const candidate of base) {
+    for (const extension of extensions) {
+      const file = path.resolve(root, `${candidate}${extension}`)
+      if (!fs.existsSync(file)) continue
+      const source = fs.readFileSync(file, 'utf-8')
+      if (/\bexport\s+(?:const|let|var|function)\s+authOptions\b|\bexport\s*\{[^}]*\bauthOptions\b/s.test(source)) {
+        return `./${candidate}`
+      }
+    }
+  }
+  return undefined
+}

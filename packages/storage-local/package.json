@@ -1,6 +1,7 @@
 {
   "name": "@editable-ui/storage-local",
   "version": "0.0.6",
+  "license": "MIT",
   "files": ["dist"],
   "description": "Local filesystem image storage for editable-ui",
   "repository": { "type": "git", "url": "git+https://github.com/hanifhadyan/editable-ui.git" },

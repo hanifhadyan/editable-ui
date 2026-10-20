@@ -40,10 +40,18 @@ export interface ContentAdapter {
   getAll(): Promise<ContentRecord>
   delete(key: string): Promise<void>
   initialize(): Promise<void>
+  /** Serializes content mutations across processes that share this adapter's backing store. */
+  withSharedContentLock?<T>(mutation: () => Promise<T>): Promise<T>
+  /** Set to false when the backing store cannot provide a shared lock in this deployment. */
+  supportsCrossProcessMutationLock?: boolean
 }
 
 export interface StorageAdapter {
   upload(file: Buffer, filename: string, mimeType: string): Promise<string>
+  /** Returns true only for URLs created by this adapter; required for safe automatic cleanup. */
+  owns?(url: string): boolean
+  /** Checks whether an owned upload still exists; required for safe automatic cleanup. */
+  exists?(url: string): Promise<boolean>
   delete(url: string): Promise<void>
 }
 
@@ -54,6 +62,7 @@ export interface EditableConfig {
 export interface EditableContextValue {
   isAdmin: boolean
   content: ContentRecord
-  setContent(key: string, value: string, type: ContentType): Promise<void>
+  setContent(key: string, value: string, type: ContentType, collectionSchema?: CollectionField[]): Promise<void>
   uploadImage(file: File): Promise<string>
+  deleteImage(url: string): Promise<void>
 }

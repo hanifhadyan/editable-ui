@@ -1,4 +1,5 @@
 import DOMPurify from 'isomorphic-dompurify'
+import type { CollectionField } from './types'
 
 const ALLOWED_TAGS = [
   'a', 'b', 'blockquote', 'br', 'code', 'del', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -30,4 +31,19 @@ export function sanitizeRichText(html: string): string {
   } finally {
     DOMPurify.removeHook('uponSanitizeAttribute', restrictStyle)
   }
+}
+
+export function sanitizeCollectionValue(value: string, schema: CollectionField[]): string {
+  const items: unknown = JSON.parse(value)
+  if (!Array.isArray(items)) throw new TypeError('Collection content must be a JSON array')
+
+  const richTextFields = schema.filter(field => field.type === 'richtext').map(field => field.field)
+  return JSON.stringify(items.map(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item
+    const safe = { ...item }
+    for (const field of richTextFields) {
+      if (typeof safe[field] === 'string') safe[field] = sanitizeRichText(safe[field])
+    }
+    return safe
+  }))
 }

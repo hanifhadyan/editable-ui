@@ -11,11 +11,16 @@ export class JsonAdapter implements ContentAdapter {
   }
 
   async initialize(): Promise<void> {
+    await fs.mkdir(path.dirname(this.filePath), { recursive: true })
     try {
-      await fs.mkdir(path.dirname(this.filePath), { recursive: true })
       const raw = await fs.readFile(this.filePath, 'utf-8')
-      this.cache = JSON.parse(raw)
-    } catch {
+      const parsed: unknown = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new TypeError(`Invalid content record in ${this.filePath}`)
+      }
+      this.cache = parsed as ContentRecord
+    } catch (error) {
+      if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw error
       this.cache = {}
       await this.flush()
     }

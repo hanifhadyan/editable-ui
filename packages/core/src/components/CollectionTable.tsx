@@ -77,7 +77,7 @@ export function CollectionTable({
       </table>
 
       {isAdmin && (
-        <button onClick={onAddItem} style={addRowBtnStyle}>
+        <button type="button" onClick={onAddItem} style={addRowBtnStyle}>
           + Add row
         </button>
       )}
@@ -99,9 +99,14 @@ function HeaderCell({
   const [editing, setEditing] = useState(false)
   const [label, setLabel] = useState(field.label)
   const inputRef = useRef<HTMLInputElement>(null)
+  const canceling = useRef(false)
 
   const commit = () => {
     setEditing(false)
+    if (canceling.current) {
+      canceling.current = false
+      return
+    }
     if (label !== field.label) onLabelChange(field.field, label)
   }
 
@@ -112,9 +117,17 @@ function HeaderCell({
           ref={inputRef}
           value={label}
           autoFocus
+          aria-label={`Rename ${field.label}`}
           onChange={e => setLabel(e.target.value)}
           onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') commit() }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commit()
+            if (e.key === 'Escape') {
+              canceling.current = true
+              setLabel(field.label)
+              setEditing(false)
+            }
+          }}
           style={{ border: 'none', outline: 'none', fontWeight: 700, fontSize: 'inherit', background: 'transparent', width: '100%' }}
         />
       </th>
@@ -122,13 +135,12 @@ function HeaderCell({
   }
 
   return (
-    <th
-      style={thStyle}
-      onClick={() => isAdmin && setEditing(true)}
-      title={isAdmin ? 'Click to rename column' : undefined}
-    >
-      {field.label}
-      {isAdmin && <span style={{ marginLeft: 4, opacity: 0.4, fontSize: 10 }}>✎</span>}
+    <th style={thStyle}>
+      {isAdmin ? (
+        <button type="button" onClick={() => { canceling.current = false; setEditing(true) }} aria-label={`Rename ${field.label}`} style={headerEditBtnStyle}>
+          {field.label} <span aria-hidden="true" style={{ marginLeft: 4, opacity: 0.4, fontSize: 10 }}>✎</span>
+        </button>
+      ) : field.label}
     </th>
   )
 }
@@ -188,15 +200,15 @@ function TableRow({
 
       {isAdmin && (
         <td style={{ ...tdStyle, width: 36 }}>
-          {hovered && (
-            <button
-              onClick={e => { e.stopPropagation(); onDeleteItem(item.id) }}
-              title="Delete row"
-              style={deleteBtnStyle}
-            >
-              🗑
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onDeleteItem(item.id) }}
+            aria-label={`Delete row ${item.id}`}
+            title="Delete row"
+            style={deleteBtnStyle}
+          >
+            🗑
+          </button>
         </td>
       )}
     </tr>
@@ -243,6 +255,7 @@ function EditableCell({
         <td style={tdStyle} onClick={e => e.stopPropagation()}>
           <select
             autoFocus
+            aria-label={field.label}
             value={draft}
             onChange={e => setDraft(e.target.value)}
             onBlur={commit}
@@ -258,6 +271,7 @@ function EditableCell({
       <td style={tdStyle} onClick={e => e.stopPropagation()}>
         <input
           autoFocus
+          aria-label={`Edit ${field.label}`}
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onBlur={commit}
@@ -276,7 +290,14 @@ function EditableCell({
       }}
       onDoubleClick={e => { e.stopPropagation(); onStartEdit() }}
       onClick={onRowClick}
-      title={isAdmin ? 'Double-click to edit, single-click to open detail' : undefined}
+      tabIndex={isAdmin ? 0 : undefined}
+      onKeyDown={e => {
+        if (!isAdmin || (e.key !== 'Enter' && e.key !== ' ')) return
+        e.preventDefault()
+        e.stopPropagation()
+        onStartEdit()
+      }}
+      title={isAdmin ? 'Press Enter or double-click to edit; click to open detail' : undefined}
     >
       {value || <span style={{ color: '#bbb' }}>—</span>}
     </td>
@@ -295,6 +316,18 @@ const thStyle: React.CSSProperties = {
   color: '#666',
   borderBottom: '2px solid #eee',
   whiteSpace: 'nowrap',
+}
+
+const headerEditBtnStyle: React.CSSProperties = {
+  border: 0,
+  padding: 0,
+  background: 'transparent',
+  color: 'inherit',
+  font: 'inherit',
+  textAlign: 'left',
+  textTransform: 'inherit',
+  letterSpacing: 'inherit',
+  cursor: 'pointer',
 }
 
 const tdStyle: React.CSSProperties = {

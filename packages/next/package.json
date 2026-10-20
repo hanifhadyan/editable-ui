@@ -1,6 +1,7 @@
 {
   "name": "@editable-ui/next",
   "version": "0.1.0",
+  "license": "MIT",
   "files": ["dist"],
   "description": "Next.js API route helpers for editable-ui",
   "repository": { "type": "git", "url": "git+https://github.com/hanifhadyan/editable-ui.git" },

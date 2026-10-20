@@ -1,32 +1,33 @@
-export function generateAppContentRoute(): string {
-  return `import { NextRequest, NextResponse } from 'next/server'
+export function generateAppContentRoute(useTypeScript = true): string {
+  return `import { ${useTypeScript ? 'NextRequest, ' : ''}NextResponse } from 'next/server'
 import {
   createInitializer,
   isJsonRequest,
   isSameOriginRequest,
   isContentType,
+  writeContent,
+  deleteContent,
   readJsonBody,
   RequestBodyError,
   MAX_CONTENT_REQUEST_SIZE,
 } from '@editable-ui/next'
-import { sanitizeRichText } from '@editable-ui/core'
-import { adapter, isAdmin } from '../../../../editable.config'
+import { adapter, storage, isAdmin } from '../../../../editable.config'
 
 export const dynamic = 'force-dynamic'
 
 const ensureInitialized = createInitializer(() => adapter.initialize())
 
-async function checkAdmin(req: NextRequest): Promise<boolean> {
-  return isAdmin(req as any)
+async function checkAdmin(req${useTypeScript ? ': NextRequest' : ''})${useTypeScript ? ': Promise<boolean>' : ''} {
+  return isAdmin(req${useTypeScript ? ' as any' : ''})
 }
 
-function mutationError(req: NextRequest) {
+function mutationError(req${useTypeScript ? ': NextRequest' : ''}) {
   if (!isJsonRequest(req)) return NextResponse.json({ error: 'Expected JSON request' }, { status: 415 })
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: 'Invalid origin' }, { status: 403 })
   return null
 }
 
-async function parseBody(req: NextRequest) {
+async function parseBody(req${useTypeScript ? ': NextRequest' : ''}) {
   try {
     return await readJsonBody(req, MAX_CONTENT_REQUEST_SIZE)
   } catch (error) {
@@ -35,29 +36,34 @@ async function parseBody(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req${useTypeScript ? ': NextRequest' : ''}) {
   if (!await checkAdmin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   await ensureInitialized()
   const all = await adapter.getAll()
   return NextResponse.json(all, { headers: { 'Cache-Control': 'private, no-store' } })
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req${useTypeScript ? ': NextRequest' : ''}) {
   if (!await checkAdmin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const error = mutationError(req)
   if (error) return error
   const body = await parseBody(req)
   if (body instanceof NextResponse) return body
-  const { key, value, type } = body ?? {}
+  const { key, value, type, schema } = body ?? {}
   if (typeof key !== 'string' || !key || typeof value !== 'string' || !isContentType(type)) {
     return NextResponse.json({ error: 'Missing key, value, or type' }, { status: 400 })
   }
   await ensureInitialized()
-  await adapter.set(key, type === 'richtext' ? sanitizeRichText(value) : value, type)
+  try {
+    await writeContent(adapter, storage, key, value, type, schema)
+  } catch (error) {
+    if (error instanceof TypeError) return NextResponse.json({ error: error.message }, { status: 400 })
+    throw error
+  }
   return NextResponse.json({ ok: true })
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req${useTypeScript ? ': NextRequest' : ''}) {
   if (!await checkAdmin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const error = mutationError(req)
   if (error) return error
@@ -66,31 +72,36 @@ export async function DELETE(req: NextRequest) {
   const { key } = body ?? {}
   if (typeof key !== 'string' || !key) return NextResponse.json({ error: 'Missing key' }, { status: 400 })
   await ensureInitialized()
-  await adapter.delete(key)
+  await deleteContent(adapter, storage, key)
   return NextResponse.json({ ok: true })
 }
 `
 }
 
-export function generateAppUploadRoute(): string {
-  return `import { NextRequest, NextResponse } from 'next/server'
+export function generateAppUploadRoute(useTypeScript = true): string {
+  return `import { ${useTypeScript ? 'NextRequest, ' : ''}NextResponse } from 'next/server'
 import {
   ImageUploadError,
   isJsonRequest,
   isSameOriginRequest,
   MAX_UPLOAD_REQUEST_SIZE,
+  MAX_CONTENT_REQUEST_SIZE,
   readJsonBody,
   RequestBodyError,
   storeUploadedImage,
+  deleteUnreferencedUpload,
+  createInitializer,
 } from '@editable-ui/next'
-import { storage, isAdmin } from '../../../../editable.config'
+import { adapter, storage, isAdmin } from '../../../../editable.config'
 
-export async function POST(req: NextRequest) {
-  if (!await isAdmin(req as any)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+const ensureInitialized = createInitializer(() => adapter.initialize())
+
+export async function POST(req${useTypeScript ? ': NextRequest' : ''}) {
+  if (!await isAdmin(req${useTypeScript ? ' as any' : ''})) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   if (!isJsonRequest(req)) return NextResponse.json({ error: 'Expected JSON request' }, { status: 415 })
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: 'Invalid origin' }, { status: 403 })
 
-  let body: any
+  let body${useTypeScript ? ': Record<string, unknown>' : ''}
   try {
     body = await readJsonBody(req, MAX_UPLOAD_REQUEST_SIZE)
   } catch (error) {
@@ -107,6 +118,25 @@ export async function POST(req: NextRequest) {
     }
     throw error
   }
+}
+
+export async function DELETE(req${useTypeScript ? ': NextRequest' : ''}) {
+  if (!await isAdmin(req${useTypeScript ? ' as any' : ''})) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isJsonRequest(req)) return NextResponse.json({ error: 'Expected JSON request' }, { status: 415 })
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: 'Invalid origin' }, { status: 403 })
+
+  let body${useTypeScript ? ': Record<string, unknown>' : ''}
+  try {
+    body = await readJsonBody(req, MAX_CONTENT_REQUEST_SIZE)
+  } catch (error) {
+    const status = error instanceof RequestBodyError ? error.statusCode : 400
+    return NextResponse.json({ error: 'Invalid request body' }, { status })
+  }
+  if (typeof body?.url !== 'string' || !body.url) return NextResponse.json({ error: 'Missing upload URL' }, { status: 400 })
+
+  await ensureInitialized()
+  const deleted = await deleteUnreferencedUpload(adapter, storage, body.url)
+  return NextResponse.json({ ok: true, deleted })
 }
 `
 }

@@ -7,9 +7,11 @@ interface FloatingEditBarProps {
   isPreview: boolean
   onEdit: () => void
   onPreview: () => void
-  onSave: () => void
+  onSave: () => void | Promise<void>
   onCancel: () => void
   saving?: boolean
+  uploading?: boolean
+  error?: string
 }
 
 export function FloatingEditBar({
@@ -20,21 +22,24 @@ export function FloatingEditBar({
   onSave,
   onCancel,
   saving = false,
+  uploading = false,
+  error,
 }: FloatingEditBarProps) {
   return (
-    <div style={barStyle}>
+    <div role="toolbar" aria-label={`Edit ${label}`} style={barStyle}>
       <span style={labelStyle}>{label}</span>
       <div style={{ display: 'flex', gap: 4 }}>
         {isPreview ? (
-          <button onClick={onEdit} style={btnStyle('#444', '#fff')}>✏ Edit</button>
+          <button type="button" onClick={onEdit} style={btnStyle('#444', '#fff')}>✏ Edit</button>
         ) : (
-          <button onClick={onPreview} style={btnStyle('#444', '#fff')}>👁 Preview</button>
+          <button type="button" onClick={onPreview} style={btnStyle('#444', '#fff')}>👁 Preview</button>
         )}
-        <button onClick={onSave} disabled={saving} style={btnStyle('#c9a84c', '#1a1008')}>
-          {saving ? 'Saving…' : '✓ Save'}
+          <button type="button" onClick={onSave} disabled={saving || uploading} style={btnStyle('#c9a84c', '#1a1008')}>
+          {saving ? 'Saving…' : uploading ? 'Uploading…' : '✓ Save'}
         </button>
-        <button onClick={onCancel} style={btnStyle('#333', '#aaa')}>✕ Cancel</button>
+        <button type="button" onClick={onCancel} disabled={saving} style={btnStyle('#333', '#aaa')}>✕ Cancel</button>
       </div>
+      {error && <span role="alert" style={{ color: '#ffaaaa', fontSize: 12 }}>{error}</span>}
     </div>
   )
 }

@@ -29,15 +29,9 @@ export function EditableText({
 
   const [state, setState] = useState<EditState>('idle')
   const [draft, setDraft] = useState(savedValue)
-  const [hovered, setHovered] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const ref = useRef<HTMLElement>(null)
-  const wrapRef = useRef<HTMLDivElement>(null)
-
-  // Detect cursor already inside on mount (page navigation mid-hover)
-  useEffect(() => {
-    if (state === 'idle' && wrapRef.current?.matches(':hover')) setHovered(true)
-  }, [state])
 
   // Sync external value changes when idle
   useEffect(() => {
@@ -68,12 +62,6 @@ export function EditableText({
     return () => window.removeEventListener('beforeunload', handler)
   }, [state])
 
-  // Non-admin: plain render
-  if (!isAdmin) {
-    const El = Tag as React.ElementType
-    return <El className={className} style={style}>{savedValue}</El>
-  }
-
   const captureDraft = () => ref.current?.innerText ?? draft
 
   const handlePreview = useCallback(() => {
@@ -84,16 +72,29 @@ export function EditableText({
   const handleSave = useCallback(async () => {
     const text = state === 'editing' ? captureDraft() : draft
     setSaving(true)
-    await setContent(contentKey, text, 'text')
-    setSaving(false)
     setDraft(text)
-    setState('idle')
+    setError('')
+    try {
+      await setContent(contentKey, text, 'text')
+      setState('idle')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not save text')
+    } finally {
+      setSaving(false)
+    }
   }, [state, draft, contentKey, setContent]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCancel = useCallback(() => {
     setDraft(savedValue)
+    setError('')
     setState('idle')
   }, [savedValue])
+
+  // Non-admin: plain render
+  if (!isAdmin) {
+    const El = Tag as React.ElementType
+    return <El className={className} style={style}>{savedValue}</El>
+  }
 
   return (
     <>
@@ -106,23 +107,19 @@ export function EditableText({
           onSave={handleSave}
           onCancel={handleCancel}
           saving={saving}
+          error={error}
         />
       )}
 
       <div
-        ref={wrapRef}
         style={{ position: 'relative', width: '100%' }}
-        onMouseEnter={() => state === 'idle' && setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
       >
         {state === 'idle' && (
           <>
             {React.createElement(Tag as string, { className, style }, savedValue || defaultValue)}
-            {hovered && (
-              <button onClick={() => setState('editing')} style={editBtnStyle} title={`Edit "${contentKey}"`}>
-                ✏ Edit
-              </button>
-            )}
+            <button type="button" onClick={() => setState('editing')} style={editBtnStyle} aria-label={`Edit ${contentKey}`}>
+              ✏ Edit
+            </button>
           </>
         )}
 

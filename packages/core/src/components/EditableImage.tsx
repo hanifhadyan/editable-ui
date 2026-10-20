@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState } from 'react'
 import { useEditableContext } from '../EditableContext'
 import { EditIcon } from './EditIcon'
 
@@ -17,47 +17,49 @@ export function EditableImage({
   alt,
   ...props
 }: EditableImageProps) {
-  const { isAdmin, content, setContent, uploadImage } = useEditableContext()
-  const [isHovered, setIsHovered] = useState(false)
+  const { isAdmin, content, setContent, uploadImage, deleteImage } = useEditableContext()
   const [isUploading, setIsUploading] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [urlInput, setUrlInput] = useState('')
+  const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
-  const containerRef = useRef<HTMLSpanElement>(null)
-
-  // Detect cursor already inside on mount
-  useEffect(() => {
-    if (isAdmin && containerRef.current?.matches(':hover')) setIsHovered(true)
-  }, [isAdmin])
 
   const src = content[contentKey]?.value ?? defaultSrc
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    let uploadedUrl: string | undefined
     setIsUploading(true)
+    setError('')
     try {
-      const url = await uploadImage(file)
-      await setContent(contentKey, url, 'image')
+      uploadedUrl = await uploadImage(file)
+      await setContent(contentKey, uploadedUrl, 'image')
+      setShowModal(false)
+    } catch (cause) {
+      if (uploadedUrl) await deleteImage(uploadedUrl).catch(() => {})
+      setError(cause instanceof Error ? cause.message : 'Could not save image')
     } finally {
       setIsUploading(false)
-      setShowModal(false)
+      e.target.value = ''
     }
   }
 
   const handleUrlSave = async () => {
     if (!urlInput.trim()) return
-    await setContent(contentKey, urlInput.trim(), 'image')
-    setUrlInput('')
-    setShowModal(false)
+    setError('')
+    try {
+      await setContent(contentKey, urlInput.trim(), 'image')
+      setUrlInput('')
+      setShowModal(false)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not save image URL')
+    }
   }
 
   return (
     <span
-      ref={containerRef}
       style={{ position: 'relative', display: 'inline-block', width: '100%' }}
-      onMouseEnter={() => isAdmin && setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       <img
         src={src}
@@ -66,16 +68,16 @@ export function EditableImage({
         style={{ ...style, opacity: isUploading ? 0.5 : 1 }}
         {...props}
       />
-      {isAdmin && isHovered && !showModal && (
+      {isAdmin && !showModal && (
         <EditIcon onClick={() => setShowModal(true)} />
       )}
       {showModal && (
         <div style={modalStyle}>
           <p style={{ margin: '0 0 8px', fontWeight: 600 }}>Change image</p>
-          <button onClick={() => fileRef.current?.click()} style={btnStyle}>
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={isUploading} style={btnStyle}>
             Upload file
           </button>
-          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" style={{ display: 'none' }} onChange={handleFile} />
+          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" style={{ display: 'none' }} disabled={isUploading} onChange={handleFile} />
           <div style={{ margin: '8px 0', textAlign: 'center', color: '#999' }}>or</div>
           <input
             type="url"
@@ -85,11 +87,12 @@ export function EditableImage({
             style={inputStyle}
           />
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button onClick={handleUrlSave} style={btnStyle}>Save URL</button>
-            <button onClick={() => setShowModal(false)} style={{ ...btnStyle, background: '#eee', color: '#333' }}>
+            <button type="button" onClick={handleUrlSave} disabled={isUploading} style={btnStyle}>Save URL</button>
+            <button type="button" onClick={() => setShowModal(false)} disabled={isUploading} style={{ ...btnStyle, background: '#eee', color: '#333' }}>
               Cancel
             </button>
           </div>
+          {error && <p role="alert" style={{ color: '#b00020', margin: '8px 0 0' }}>{error}</p>}
         </div>
       )}
     </span>

@@ -2,11 +2,12 @@
   "name": "editable-ui",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "description": "Inline visual editing plugin for React/Next.js",
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm -r dev",
-    "lint": "pnpm -r --if-present lint",
+    "lint": "eslint \"packages/**/*.{ts,tsx}\"",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm build && node --test tests/security.test.cjs",
     "clean": "pnpm -r clean",
@@ -17,7 +18,10 @@
     "@types/node": "^20.0.0",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
-    "typescript": "^5.0.0"
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.72.0"
   },
   "engines": {
     "node": ">=22.11.0",

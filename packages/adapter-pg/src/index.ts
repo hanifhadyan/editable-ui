@@ -1,4 +1,4 @@
-import { Pool, type PoolConfig } from 'pg'
+import { Pool, type PoolClient, type PoolConfig } from 'pg'
 import type { ContentAdapter, ContentEntry, ContentRecord, ContentType } from '@editable-ui/core'
 
 function quoteTableName(table: string): string {
@@ -12,6 +12,7 @@ function quoteTableName(table: string): string {
 export class PostgresAdapter implements ContentAdapter {
   private pool: Pool
   private table: string
+  private mutationClient?: PoolClient
 
   constructor(config: PoolConfig | string, table = 'editable_content') {
     this.table = quoteTableName(table)
@@ -29,8 +30,34 @@ export class PostgresAdapter implements ContentAdapter {
     `)
   }
 
+  async withSharedContentLock<T>(mutation: () => Promise<T>): Promise<T> {
+    const client = await this.pool.connect()
+    const lockName = `editable-ui:${this.table}`
+    let acquired = false
+    try {
+      await client.query('SELECT pg_advisory_lock(hashtext($1))', [lockName])
+      acquired = true
+      this.mutationClient = client
+      return await mutation()
+    } finally {
+      this.mutationClient = undefined
+      let releaseError: Error | undefined
+      if (acquired) {
+        try {
+          const result = await client.query<{ pg_advisory_unlock: boolean }>(
+            'SELECT pg_advisory_unlock(hashtext($1))', [lockName]
+          )
+          if (result.rows[0]?.pg_advisory_unlock !== true) releaseError = new Error('Could not release content lock')
+        } catch (error) {
+          releaseError = error instanceof Error ? error : new Error(String(error))
+        }
+      }
+      client.release(releaseError)
+    }
+  }
+
   async get(key: string): Promise<ContentEntry | null> {
-    const res = await this.pool.query(
+    const res = await (this.mutationClient ?? this.pool).query(
       `SELECT value, type, updated_at FROM ${this.table} WHERE key = $1`,
       [key]
     )
@@ -40,7 +67,7 @@ export class PostgresAdapter implements ContentAdapter {
   }
 
   async set(key: string, value: string, type: ContentType): Promise<void> {
-    await this.pool.query(
+    await (this.mutationClient ?? this.pool).query(
       `INSERT INTO ${this.table} (key, value, type, updated_at)
        VALUES ($1, $2, $3, now())
        ON CONFLICT (key) DO UPDATE SET value = $2, type = $3, updated_at = now()`,
@@ -49,13 +76,13 @@ export class PostgresAdapter implements ContentAdapter {
   }
 
   async getAll(): Promise<ContentRecord> {
-    const res = await this.pool.query(`SELECT key, value, type, updated_at FROM ${this.table}`)
+    const res = await (this.mutationClient ?? this.pool).query(`SELECT key, value, type, updated_at FROM ${this.table}`)
     return Object.fromEntries(
       res.rows.map(r => [r.key, { value: r.value, type: r.type, updatedAt: r.updated_at }])
     )
   }
 
   async delete(key: string): Promise<void> {
-    await this.pool.query(`DELETE FROM ${this.table} WHERE key = $1`, [key])
+    await (this.mutationClient ?? this.pool).query(`DELETE FROM ${this.table} WHERE key = $1`, [key])
   }
 }

@@ -2,6 +2,7 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3'
 import crypto from 'crypto'
 import path from 'path'
@@ -36,6 +37,7 @@ export class S3StorageAdapter implements StorageAdapter {
       (options.endpoint
         ? `${options.endpoint}/${options.bucket}`
         : `https://${options.bucket}.s3.${options.region ?? 'us-east-1'}.amazonaws.com`)
+    this.publicUrl = this.publicUrl.replace(/\/+$/, '')
   }
 
   async upload(file: Buffer, filename: string, mimeType: string): Promise<string> {
@@ -52,8 +54,29 @@ export class S3StorageAdapter implements StorageAdapter {
     return `${this.publicUrl}/${key}`
   }
 
+  owns(url: string): boolean {
+    const prefix = `${this.publicUrl}/uploads/`
+    return url.startsWith(prefix) && /^[a-f0-9]{16}\.(?:png|jpg|gif|webp)$/.test(url.slice(prefix.length))
+  }
+
+  async exists(url: string): Promise<boolean> {
+    if (!this.owns(url)) return false
+    const key = url.slice(`${this.publicUrl}/`.length)
+    try {
+      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }))
+      return true
+    } catch (error) {
+      if (error && typeof error === 'object') {
+        const response = error as { name?: unknown; $metadata?: { httpStatusCode?: unknown } }
+        if (response.name === 'NotFound' || response.$metadata?.httpStatusCode === 404) return false
+      }
+      throw error
+    }
+  }
+
   async delete(url: string): Promise<void> {
-    const key = url.replace(`${this.publicUrl}/`, '')
+    if (!this.owns(url)) return
+    const key = url.slice(`${this.publicUrl}/`.length)
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key })
     )

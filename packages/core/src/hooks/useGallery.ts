@@ -10,7 +10,7 @@ function parse(raw: string | undefined): GalleryImage[] {
 }
 
 export function useGallery(contentKey: string) {
-  const { isAdmin, content, setContent, uploadImage } = useEditableContext()
+  const { isAdmin, content, setContent, uploadImage, deleteImage } = useEditableContext()
 
   const images = parse(content[contentKey]?.value)
 
@@ -21,7 +21,7 @@ export function useGallery(contentKey: string) {
 
   const addImages = useCallback(
     async (files: File[]) => {
-      const uploaded: GalleryImage[] = await Promise.all(
+      const results = await Promise.allSettled(
         files.map(async (file) => ({
           id: crypto.randomUUID(),
           src: await uploadImage(file),
@@ -29,9 +29,22 @@ export function useGallery(contentKey: string) {
           caption: '',
         }))
       )
-      save([...images, ...uploaded])
+      const uploaded = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
+      if (uploaded.length) {
+        try {
+          await save([...images, ...uploaded])
+        } catch (error) {
+          await Promise.allSettled(uploaded.map(image => deleteImage(image.src)))
+          throw error
+        }
+      }
+      if (uploaded.length !== files.length) {
+        throw new Error(uploaded.length
+          ? `Uploaded ${uploaded.length} of ${files.length} images; successful uploads were saved.`
+          : 'Could not upload any images.')
+      }
     },
-    [images, save, uploadImage]
+    [images, save, uploadImage, deleteImage]
   )
 
   const removeImage = useCallback(

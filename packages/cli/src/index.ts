@@ -4,12 +4,13 @@ import * as p from '@clack/prompts'
 import pc from 'picocolors'
 import { execa } from 'execa'
 import type { InitOptions, DbAdapter, StorageAdapter, AuthProvider, Router } from './types'
-import { detectPackageManager, detectRouter, detectNextJs, isTypeScript } from './detect'
+import { detectPackageManager, detectRouter, detectNextJs, detectAuthOptionsPath, isTypeScript } from './detect'
 import { resolvePackages } from './packages'
 import { generateConfig } from './generators/config'
 import { generatePagesContentRoute, generatePagesUploadRoute } from './generators/api-pages'
 import { generateAppContentRoute, generateAppUploadRoute } from './generators/api-app'
 import { generateEnvExample } from './generators/env'
+import { findConflictingFiles, generatedFilePaths, mergeEnvExample, normalizeAuthOptionsPath } from './files'
 
 async function main() {
   console.log('')
@@ -78,6 +79,22 @@ async function main() {
     router = selected as Router
   }
 
+  let authOptionsPath: string | undefined
+  if (auth === 'next-auth') {
+    authOptionsPath = detectAuthOptionsPath(router)
+    if (!authOptionsPath) {
+      const enteredPath = await p.text({
+        message: 'Path to the module that exports authOptions (relative to the project root)',
+        placeholder: router === 'pages' ? './pages/api/auth/[...nextauth]' : './auth',
+        defaultValue: router === 'pages' ? './pages/api/auth/[...nextauth]' : './auth',
+        validate: value => normalizeAuthOptionsPath(value) ? undefined : 'Enter a project-relative module path without a file extension.',
+      })
+      if (p.isCancel(enteredPath)) cancel()
+      authOptionsPath = normalizeAuthOptionsPath(enteredPath as string)
+      if (!authOptionsPath) cancel()
+    }
+  }
+
   const pm = await p.select<{ value: InitOptions['packageManager']; label: string }[], InitOptions['packageManager']>({
     message: 'Package manager?',
     initialValue: detectedPm,
@@ -96,6 +113,15 @@ async function main() {
     auth: auth as AuthProvider,
     router,
     packageManager: pm as InitOptions['packageManager'],
+    authOptionsPath,
+  }
+
+  const generatedFiles = generatedFilePaths(router, ext)
+  const conflicts = findConflictingFiles(generatedFiles)
+  if (conflicts.length) {
+    p.log.error(`Refusing to overwrite existing generated files:\n${conflicts.map(file => `  ${file}`).join('\n')}`)
+    p.outro('Remove or rename those files, then rerun editable-ui init.')
+    process.exit(1)
   }
 
   const packages = resolvePackages(opts)
@@ -112,16 +138,16 @@ async function main() {
   try {
     await execa(pm, installArgs, { cwd: process.cwd() })
     s.stop('Packages installed.')
-  } catch (err: any) {
+  } catch (err) {
     s.stop('Install failed.')
-    p.log.error(err.message)
+    p.log.error(err instanceof Error ? err.message : String(err))
     process.exit(1)
   }
 
   // write editable.config.ts
   s.start('Generating files...')
 
-  writeFile(`editable.config.${ext}`, generateConfig(opts))
+  writeFile(`editable.config.${ext}`, generateConfig(opts, useTs))
 
   // write API routes
   if (router === 'pages') {
@@ -133,18 +159,20 @@ async function main() {
     const apiDir = path.resolve('app', 'api', 'editable')
     fs.mkdirSync(path.join(apiDir, 'content'), { recursive: true })
     fs.mkdirSync(path.join(apiDir, 'upload'), { recursive: true })
-    writeFile(path.join('app', 'api', 'editable', 'content', `route.${ext}`), generateAppContentRoute())
-    writeFile(path.join('app', 'api', 'editable', 'upload', `route.${ext}`), generateAppUploadRoute())
+    writeFile(path.join('app', 'api', 'editable', 'content', `route.${ext}`), generateAppContentRoute(useTs))
+    writeFile(path.join('app', 'api', 'editable', 'upload', `route.${ext}`), generateAppUploadRoute(useTs))
   }
 
   // append .env.example
   const envContent = generateEnvExample(opts)
+  let envUpdated = false
   if (envContent.trim()) {
     const envPath = path.resolve('.env.example')
-    if (fs.existsSync(envPath)) {
-      fs.appendFileSync(envPath, '\n' + envContent)
-    } else {
-      fs.writeFileSync(envPath, envContent)
+    const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : ''
+    const merged = mergeEnvExample(existing, envContent)
+    if (merged !== existing) {
+      fs.writeFileSync(envPath, merged, 'utf-8')
+      envUpdated = true
     }
   }
 
@@ -161,7 +189,7 @@ async function main() {
     p.log.info(`  app/api/editable/content/route.${ext}`)
     p.log.info(`  app/api/editable/upload/route.${ext}`)
   }
-  if (envContent.trim()) p.log.info('  .env.example (updated)')
+  if (envUpdated) p.log.info('  .env.example (updated)')
 
   console.log('')
   p.log.info('Next steps:')
@@ -179,7 +207,7 @@ async function main() {
 function writeFile(relPath: string, content: string) {
   const abs = path.resolve(relPath)
   fs.mkdirSync(path.dirname(abs), { recursive: true })
-  fs.writeFileSync(abs, content, 'utf-8')
+  fs.writeFileSync(abs, content, { encoding: 'utf-8', flag: 'wx' })
 }
 
 function cancel(): never {
