@@ -2,6 +2,7 @@ node_modules/
 dist/
 .next/
 .turbo/
+.serena/
 *.tsbuildinfo
 .env
 .env.local
