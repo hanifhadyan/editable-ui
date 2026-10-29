@@ -8,9 +8,9 @@ This pnpm workspace publishes the packages under `packages/` independently. The 
 2. Choose the version bump and describe the user-visible change. Breaking changes to the current `0.x` packages use a minor bump.
 3. Commit the generated `.changeset/*.md` file with the code change.
 
-Pull requests run type checks and the package security tests. After a changeset reaches `master`, the release workflow opens a version pull request. Review its package versions, dependency ranges, and generated changelogs, then merge it to publish.
+Pull requests run type checks and the package security tests. After a changeset reaches `master`, the release workflow pushes `changeset-release/master`; the repository owner opens and reviews its version pull request, then merges it to publish.
 
-The version job needs the repository setting **Allow GitHub Actions to create and approve pull requests**. If it is disabled, the job pushes `changeset-release/master` but cannot open the pull request; open a PR from that branch manually. Enabling this setting also permits workflows to approve PRs.
+Keep **Allow GitHub Actions to create and approve pull requests** disabled so workflows cannot approve PRs. The version job pushes `changeset-release/master`; open its version PR manually from that branch.
 
 ## Bootstrap the first publish of a package
 
