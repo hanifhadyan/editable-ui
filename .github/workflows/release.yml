@@ -82,7 +82,7 @@ jobs:
           publish-plan-artifact-id: ${{ needs.select-mode.outputs.publish-plan-artifact-id }}
 
   publish:
-    if: needs.select-mode.outputs.mode == 'publish'
+    if: needs.select-mode.outputs.mode == 'publish' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     needs: [select-mode, pack]
     runs-on: ubuntu-latest
     permissions:
